@@ -1,0 +1,111 @@
+import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+const NOW = "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS workspaces (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT ${NOW}
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'moderator')),
+  is_active INTEGER NOT NULL DEFAULT 1,
+  is_online INTEGER NOT NULL DEFAULT 0,
+  last_assigned_at TEXT,
+  created_at TEXT NOT NULL DEFAULT ${NOW}
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL
+);
+
+-- A connected Facebook Page, Instagram professional account or WhatsApp number.
+CREATE TABLE IF NOT EXISTS channels (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL CHECK (platform IN ('messenger', 'instagram', 'whatsapp')),
+  external_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  access_token TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT ${NOW},
+  UNIQUE (platform, external_id)
+);
+
+-- A customer as seen by one channel (PSID, IGSID or WhatsApp wa_id).
+CREATE TABLE IF NOT EXISTS contacts (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  external_id TEXT NOT NULL,
+  name TEXT,
+  created_at TEXT NOT NULL DEFAULT ${NOW},
+  UNIQUE (channel_id, external_id)
+);
+
+-- One long-lived thread per contact. The assignee sticks across sessions.
+CREATE TABLE IF NOT EXISTS conversations (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  contact_id INTEGER NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
+  assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  unread_count INTEGER NOT NULL DEFAULT 0,
+  last_message_at TEXT,
+  last_message_preview TEXT NOT NULL DEFAULT '',
+  last_inbound_at TEXT,
+  created_at TEXT NOT NULL DEFAULT ${NOW}
+);
+CREATE INDEX IF NOT EXISTS conversations_by_workspace ON conversations(workspace_id, status, last_message_at);
+CREATE INDEX IF NOT EXISTS conversations_by_assignee ON conversations(assigned_user_id, status);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY,
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+  sender_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  text TEXT NOT NULL DEFAULT '',
+  attachments TEXT NOT NULL DEFAULT '[]',
+  external_id TEXT,
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed', 'received')),
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT ${NOW}
+);
+CREATE UNIQUE INDEX IF NOT EXISTS messages_by_external_id ON messages(external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages(conversation_id, id);
+`;
+
+export function openDb(path) {
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
+  const db = new DatabaseSync(path);
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  db.exec(SCHEMA);
+  return db;
+}
+
+export function transaction(db, fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function nowIso() {
+  return new Date().toISOString();
+}

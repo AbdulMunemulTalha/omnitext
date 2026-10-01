@@ -1,0 +1,20 @@
+{
+  "name": "omnitext",
+  "version": "0.1.0",
+  "description": "Unified Messenger, Instagram and WhatsApp inbox with sticky moderator assignment for social-commerce sellers.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.1"
+  }
+}

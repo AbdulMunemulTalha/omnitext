@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OmniText Inbox</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="auth" class="auth" hidden>
+    <form id="auth-form" class="card">
+      <h1>OmniText</h1>
+      <p class="muted">Messenger, Instagram and WhatsApp orders in one inbox.</p>
+      <div id="signup-fields" hidden>
+        <label>Business name<input name="businessName" autocomplete="organization"></label>
+        <label>Your name<input name="name" autocomplete="name"></label>
+      </div>
+      <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+      <p id="auth-error" class="error" hidden></p>
+      <button type="submit" id="auth-submit">Sign in</button>
+      <button type="button" id="auth-toggle" class="link">New business? Create an account</button>
+    </form>
+  </section>
+
+  <section id="app" class="app" hidden>
+    <header class="topbar">
+      <strong id="workspace-name"></strong>
+      <span class="spacer"></span>
+      <label class="duty"><input type="checkbox" id="duty-toggle"> On duty</label>
+      <button id="open-settings" class="ghost" hidden>Team &amp; channels</button>
+      <span id="me-name" class="muted"></span>
+      <button id="logout" class="ghost">Sign out</button>
+    </header>
+
+    <aside class="sidebar">
+      <nav class="tabs" id="tabs">
+        <button data-filter="mine" class="active">Mine</button>
+        <button data-filter="unassigned">Unassigned</button>
+        <button data-filter="all" data-owner-only hidden>All</button>
+      </nav>
+      <div class="status-switch">
+        <select id="status-filter">
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <ul id="conversation-list" class="conversation-list"></ul>
+    </aside>
+
+    <main class="chat" id="chat">
+      <div class="empty" id="chat-empty">Select a conversation</div>
+      <div class="chat-inner" id="chat-inner" hidden>
+        <header class="chat-header">
+          <div>
+            <div class="chat-title" id="chat-title"></div>
+            <div class="muted small" id="chat-sub"></div>
+          </div>
+          <span class="spacer"></span>
+          <select id="assign-select" hidden></select>
+          <button id="toggle-status" class="ghost"></button>
+        </header>
+        <div class="messages" id="messages"></div>
+        <p class="notice" id="chat-notice" hidden></p>
+        <form class="composer" id="composer">
+          <textarea id="composer-text" rows="2" placeholder="Type a reply… (Enter to send, Shift+Enter for new line)"></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </main>
+  </section>
+
+  <dialog id="settings">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>Team</h2>
+    <table class="table" id="team-table"></table>
+    <form id="add-member" class="inline-form">
+      <input name="name" placeholder="Moderator name" required>
+      <input name="email" type="email" placeholder="Email" required>
+      <input name="password" placeholder="Password (optional)">
+      <button>Add moderator</button>
+    </form>
+    <p id="member-result" class="muted small"></p>
+
+    <h2>Connected channels</h2>
+    <table class="table" id="channel-table"></table>
+    <form id="add-channel" class="inline-form">
+      <select name="platform">
+        <option value="messenger">Facebook Page</option>
+        <option value="instagram">Instagram</option>
+        <option value="whatsapp">WhatsApp</option>
+      </select>
+      <input name="name" placeholder="Display name" required>
+      <input name="externalId" placeholder="Page ID / IG account ID / WA phone number ID" required>
+      <input name="accessToken" placeholder="Access token (blank = test mode)">
+      <button>Connect</button>
+    </form>
+
+    <div id="simulator" hidden>
+      <h2>Test a customer message</h2>
+      <p class="muted small">Development only. Pretends a customer messaged one of your channels.</p>
+      <form id="simulate" class="inline-form">
+        <select name="channelId" id="simulate-channel"></select>
+        <input name="customerId" placeholder="Customer ID" value="cust-1" required>
+        <input name="customerName" placeholder="Customer name" value="Rahim">
+        <input name="text" placeholder="Message" value="Ei dress ta koto taka?" required>
+        <button>Send as customer</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
