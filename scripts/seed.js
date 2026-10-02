@@ -23,6 +23,10 @@ transaction(db, () => {
   addChannel.run(ws, 'messenger', 'demo-page', 'Demo Fashion House Page');
   addChannel.run(ws, 'instagram', 'demo-ig', '@demofashionhouse');
   addChannel.run(ws, 'whatsapp', 'demo-wa', '+880 1700-000000');
+  const addReply = db.prepare('INSERT INTO saved_replies (workspace_id, shortcut, text) VALUES (?, ?, ?)');
+  addReply.run(ws, 'price', 'Ei product er dam 1,200 taka. Order korte apnar naam, phone number ar full address din please.');
+  addReply.run(ws, 'delivery', 'Dhakar moddhe delivery charge 70 taka, Dhakar baire 130 taka. 2-3 diner moddhe delivery hobe.');
+  addReply.run(ws, 'bkash', 'Advance payment bKash e pathan: 01700-000000 (Personal). Send Money korar por last 4 digit janan.');
 });
 
 console.log(`Demo data created. Sign in as owner@demo.test, nadia@demo.test or karim@demo.test with "${PASSWORD}".`);

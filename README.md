@@ -5,6 +5,9 @@ One inbox for Facebook Page, Instagram and WhatsApp orders, built for social-com
 - **One dashboard for every channel.** Messages from Messenger, Instagram DMs and the WhatsApp Business number arrive in one list. A reply goes back to the app the customer wrote from.
 - **One moderator per customer.** The first message from a new customer goes to the on-duty moderator with the fewest open chats. From then on that customer always comes back to the same moderator, even if they reply hours or days later. Other moderators can't see or reply to that customer, so two people never answer the same person.
 - **Owner oversight.** The owner sees every conversation, can reply to any of them, and can move a customer to another moderator.
+- **Orders from the chat.** **New order** opens a form filled in from what's already known about the customer. It adds the delivery charge for inside or outside Dhaka, works out the cash-on-delivery amount, and can send the customer an order summary on the app they wrote from.
+- **Orders page.** A list of all orders, with search, status tracking (confirmed, shipped, delivered, cancelled, returned) and CSV export for courier bulk upload.
+- **Saved replies.** Answers to common questions like price, delivery charge and bKash steps. A moderator types `/` and a shortcut (e.g. `/bkash`) in the reply box.
 
 ## How assignment works
 
@@ -16,6 +19,18 @@ One inbox for Facebook Page, Instagram and WhatsApp orders, built for social-com
 | Moderator replies to an unassigned customer | That moderator keeps the customer from then on. |
 | Owner replies | The message is sent, but the customer stays with their moderator. |
 | Owner removes a moderator | That moderator's open customers go back to the queue, and the moderator is signed out. |
+
+## Orders
+
+| Rule | Detail |
+| --- | --- |
+| Phone numbers | Must be a Bangladeshi mobile. `+880 1711-111111`, `8801711111111` and `01711111111` are all stored as `01711111111`. |
+| Delivery charge | The default comes from **Settings → Delivery charges**, by area (inside/outside Dhaka). It can be changed per order, e.g. for free-delivery offers. |
+| Cash on delivery | Products + delivery − discount − advance paid. The form rejects a discount or advance larger than the total. |
+| Who sees an order | The owner sees all orders. A moderator sees the orders they took, plus orders for customers assigned to them. |
+| Repeat customers | The form fills in the name, phone and address from the customer's last order. For WhatsApp, the phone comes from the customer's number. |
+| Summary message | If Meta won't accept the summary (for example, WhatsApp after 24 hours), the order is still saved and the moderator sees why the message wasn't sent. |
+| CSV export | Uses the current filter. Starts with a UTF-8 BOM so Excel shows Bangla names correctly. Text a customer typed can't run as a spreadsheet formula. |
 
 ## Run it locally
 
@@ -81,6 +96,7 @@ src/
   auth.js              password hashing, sessions
   assignment.js        moderator routing
   inbox.js             storing messages, replies, permissions
+  orders.js            order validation, totals, summary message, CSV
   platforms/meta.js    webhook parsing, signatures, Send API, messaging windows
   routes/              REST API and the webhook endpoint
 public/                dashboard (plain HTML/JS, no build step)
@@ -90,8 +106,8 @@ test/                  node:test suites
 ## Roadmap
 
 1. **Connect Facebook in one click:** Facebook Login for Business plus WhatsApp Embedded Signup, so sellers don't paste IDs and tokens. Store tokens encrypted.
-2. **Order capture:** An order form beside the chat (product, size, address, COD amount), an order list, and export to couriers such as Steadfast, Pathao and RedX.
-3. **Saved replies in Bangla and Banglish:** Price, delivery charge and bKash/Nagad payment instructions.
+2. **Courier booking:** Send orders straight to Steadfast, Pathao or RedX through their APIs, and save the tracking code on the order. A product catalog with stock, so moderators pick products instead of typing them.
+3. **Order summary in Bangla:** Let the owner edit the summary message, including the language.
 4. **WhatsApp templates and media:** Send templates after 24 hours, and show WhatsApp images and voice notes.
 5. **One customer across apps:** Link a customer who writes on both Messenger and WhatsApp, so the same moderator gets both.
 6. **Facebook post comments:** Handle "price?" comments under posts (`feed` webhook) and reply privately.

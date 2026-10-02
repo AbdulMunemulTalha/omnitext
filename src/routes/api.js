@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { transaction } from '../db.js';
 import { hashPassword, verifyPassword, createSession, deleteSession, bearerToken, requireAuth, requireOwner } from '../auth.js';
 import { InboxError } from '../inbox.js';
+import { ordersCsv } from '../orders.js';
 
 const PLATFORMS = ['messenger', 'instagram', 'whatsapp'];
 
@@ -15,6 +16,10 @@ const publicChannel = (c) => ({
   id: c.id, platform: c.platform, externalId: c.external_id, name: c.name, connected: Boolean(c.access_token),
 });
 
+const publicWorkspace = (w) => ({
+  id: w.id, name: w.name, deliveryInsideDhaka: w.delivery_inside_dhaka, deliveryOutsideDhaka: w.delivery_outside_dhaka,
+});
+
 function required(body, fields) {
   for (const f of fields) {
     if (typeof body?.[f] !== 'string' || !body[f].trim()) throw new InboxError(400, `${f} is required`);
@@ -23,7 +28,7 @@ function required(body, fields) {
 
 const id = (req) => Number(req.params.id);
 
-export function apiRoutes(db, config, inbox) {
+export function apiRoutes(db, config, inbox, orders) {
   const router = Router();
   const auth = requireAuth(db);
 
@@ -56,10 +61,10 @@ export function apiRoutes(db, config, inbox) {
   });
 
   router.get('/me', auth, (req, res) => {
-    const ws = db.prepare('SELECT name FROM workspaces WHERE id = ?').get(req.user.workspace_id);
+    const ws = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(req.user.workspace_id);
     res.json({
       user: publicUser(req.user),
-      workspace: { id: req.user.workspace_id, name: ws.name },
+      workspace: publicWorkspace(ws),
       devTools: !config.isProduction,
     });
   });
@@ -93,6 +98,63 @@ export function apiRoutes(db, config, inbox) {
   router.post('/conversations/:id/assign', auth, requireOwner, (req, res) => {
     const userId = req.body?.userId == null ? null : Number(req.body.userId);
     res.json(inbox.reassign(req.user, id(req), userId));
+  });
+
+  router.patch('/workspace', auth, requireOwner, (req, res) => {
+    const fields = { deliveryInsideDhaka: 'delivery_inside_dhaka', deliveryOutsideDhaka: 'delivery_outside_dhaka' };
+    for (const [key, column] of Object.entries(fields)) {
+      if (req.body?.[key] === undefined) continue;
+      const value = Number(req.body[key]);
+      if (!Number.isInteger(value) || value < 0) throw new InboxError(400, 'Delivery charge must be a whole number of taka');
+      db.prepare(`UPDATE workspaces SET ${column} = ? WHERE id = ?`).run(value, req.user.workspace_id);
+    }
+    res.json(publicWorkspace(db.prepare('SELECT * FROM workspaces WHERE id = ?').get(req.user.workspace_id)));
+  });
+
+  router.get('/conversations/:id/orders', auth, (req, res) => {
+    res.json({ draft: orders.draftFor(req.user, id(req)), orders: orders.forConversation(req.user, id(req)) });
+  });
+
+  router.post('/conversations/:id/orders', auth, async (req, res) => {
+    const { sendSummary, ...input } = req.body ?? {};
+    res.status(201).json(await orders.create(req.user, id(req), input, { sendSummary: Boolean(sendSummary) }));
+  });
+
+  router.get('/orders', auth, (req, res) => {
+    res.json(orders.list(req.user, { status: req.query.status, q: req.query.q }));
+  });
+
+  router.get('/orders.csv', auth, (req, res) => {
+    const date = new Date().toISOString().slice(0, 10);
+    res.type('text/csv; charset=utf-8')
+      .attachment(`orders-${date}.csv`)
+      // The BOM makes Excel read Bangla names correctly.
+      .send(`\uFEFF${ordersCsv(orders.list(req.user, { status: req.query.status, q: req.query.q }))}`);
+  });
+
+  router.patch('/orders/:id', auth, (req, res) => {
+    res.json(orders.update(req.user, id(req), { status: req.body?.status, note: req.body?.note }));
+  });
+
+  router.get('/saved-replies', auth, (req, res) => {
+    res.json(db.prepare('SELECT id, shortcut, text FROM saved_replies WHERE workspace_id = ? ORDER BY shortcut').all(req.user.workspace_id));
+  });
+
+  router.post('/saved-replies', auth, requireOwner, (req, res) => {
+    required(req.body, ['shortcut', 'text']);
+    const shortcut = req.body.shortcut.trim().replace(/^\//, '').toLowerCase();
+    if (!/^[a-z0-9_-]{1,30}$/.test(shortcut)) throw new InboxError(400, 'Shortcut can only use letters, numbers, - and _');
+    db.prepare(`
+      INSERT INTO saved_replies (workspace_id, shortcut, text) VALUES (?, ?, ?)
+      ON CONFLICT (workspace_id, shortcut) DO UPDATE SET text = excluded.text
+    `).run(req.user.workspace_id, shortcut, req.body.text.trim());
+    res.status(201).json(db.prepare('SELECT id, shortcut, text FROM saved_replies WHERE workspace_id = ? AND shortcut = ?')
+      .get(req.user.workspace_id, shortcut));
+  });
+
+  router.delete('/saved-replies/:id', auth, requireOwner, (req, res) => {
+    db.prepare('DELETE FROM saved_replies WHERE id = ? AND workspace_id = ?').run(id(req), req.user.workspace_id);
+    res.sendStatus(204);
   });
 
   router.get('/team', auth, (req, res) => {

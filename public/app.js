@@ -11,6 +11,8 @@ const state = {
   activeId: null,
   messages: [],
   socket: null,
+  savedReplies: [],
+  conversationOrders: [],
 };
 
 async function api(path, { method = 'GET', body } = {}) {
@@ -181,6 +183,7 @@ function renderChatHeader() {
   $('#chat-notice').textContent = notices.join(' ');
   $('#chat-notice').hidden = notices.length === 0;
   $('#composer').hidden = !canReply(c);
+  $('#new-order').hidden = !canReply(c);
 }
 
 function bubble(m) {
@@ -210,6 +213,7 @@ async function openConversation(id) {
   state.messages = await api(`/conversations/${id}/messages`);
   renderMessages();
   $('#messages').scrollTop = $('#messages').scrollHeight;
+  loadConversationOrders();
   const c = state.conversations.get(id);
   if (c?.unread_count && (c.assigned_user_id === state.me.user.id || state.me.user.role === 'owner')) {
     api(`/conversations/${id}/read`, { method: 'POST' }).catch(() => {});
@@ -231,6 +235,7 @@ $('#composer').addEventListener('submit', async (e) => {
 });
 
 $('#composer-text').addEventListener('keydown', (e) => {
+  if (pickerKeydown(e)) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     $('#composer').requestSubmit();
@@ -312,6 +317,10 @@ async function loadChannels() {
 $('#open-settings').addEventListener('click', () => {
   loadTeam();
   loadChannels();
+  renderSavedReplies();
+  const form = $('#delivery-form');
+  form.deliveryInsideDhaka.value = state.me.workspace.deliveryInsideDhaka;
+  form.deliveryOutsideDhaka.value = state.me.workspace.deliveryOutsideDhaka;
   $('#settings').showModal();
 });
 
@@ -347,6 +356,267 @@ $('#simulate').addEventListener('submit', async (e) => {
   }
 });
 
+// ---- Orders -------------------------------------------------------------
+
+const STATUS_LABEL = { confirmed: 'Confirmed', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', returned: 'Returned' };
+const taka = (n) => `৳${Number(n).toLocaleString('en-IN')}`;
+
+async function loadConversationOrders() {
+  const id = state.activeId;
+  const { orders } = await api(`/conversations/${id}/orders`);
+  if (id !== state.activeId) return;
+  state.conversationOrders = orders;
+  const strip = $('#order-strip');
+  strip.hidden = orders.length === 0;
+  strip.replaceChildren(el('span', { class: 'muted' }, 'Orders:'), ...orders.map((o) => el('span', { class: 'order-chip' },
+    `#${o.id} · ${taka(o.cod_amount)} COD · `, el('span', { class: `status-${o.status}` }, STATUS_LABEL[o.status]))));
+}
+
+function itemRow(item = { name: '', qty: 1, price: '' }) {
+  const row = el('div', { class: 'item-row' },
+    el('input', { name: 'itemName', placeholder: 'e.g. Red kurti (M)', required: '' }),
+    el('input', { name: 'itemQty', type: 'number', min: '1', step: '1', required: '' }),
+    el('input', { name: 'itemPrice', type: 'number', min: '0', step: '1', required: '' }),
+    el('button', { type: 'button', class: 'ghost', title: 'Remove', onclick: () => { row.remove(); renderTotals(); } }, '×'));
+  row.querySelector('[name=itemName]').value = item.name;
+  row.querySelector('[name=itemQty]').value = item.qty;
+  row.querySelector('[name=itemPrice]').value = item.price;
+  return row;
+}
+
+function readOrderForm() {
+  const form = $('#order-form');
+  const items = [...$('#order-items').children].map((row) => ({
+    name: row.querySelector('[name=itemName]').value,
+    qty: Number(row.querySelector('[name=itemQty]').value || 0),
+    price: Number(row.querySelector('[name=itemPrice]').value || 0),
+  }));
+  return {
+    customerName: form.customerName.value,
+    phone: form.phone.value,
+    address: form.address.value,
+    area: form.area.value,
+    paymentMethod: form.paymentMethod.value,
+    items,
+    deliveryCharge: form.deliveryCharge.value === '' ? null : Number(form.deliveryCharge.value),
+    discount: Number(form.discount.value || 0),
+    advancePaid: Number(form.advancePaid.value || 0),
+    note: form.note.value,
+    sendSummary: form.sendSummary.checked,
+  };
+}
+
+function renderTotals() {
+  const o = readOrderForm();
+  const subtotal = o.items.reduce((sum, i) => sum + i.qty * i.price, 0);
+  const delivery = o.deliveryCharge ?? 0;
+  const cod = subtotal + delivery - o.discount - o.advancePaid;
+  const line = (label, value, cls = '') => el('div', { class: `row ${cls}` }, el('span', {}, label), el('span', {}, value));
+  $('#order-totals').replaceChildren(...[
+    line('Products', taka(subtotal)),
+    line('Delivery', taka(delivery)),
+    o.discount ? line('Discount', `−${taka(o.discount)}`) : null,
+    o.advancePaid ? line('Advance paid', `−${taka(o.advancePaid)}`) : null,
+    line('Cash on delivery', cod < 0 ? '—' : taka(cod), 'cod'),
+  ].filter(Boolean));
+}
+
+function defaultDelivery(area) {
+  return area === 'inside_dhaka' ? state.me.workspace.deliveryInsideDhaka : state.me.workspace.deliveryOutsideDhaka;
+}
+
+$('#new-order').addEventListener('click', async () => {
+  const { draft } = await api(`/conversations/${state.activeId}/orders`);
+  const form = $('#order-form');
+  form.reset();
+  form.customerName.value = draft.customerName;
+  form.phone.value = draft.phone;
+  form.address.value = draft.address;
+  form.area.value = draft.area;
+  form.deliveryCharge.value = defaultDelivery(draft.area);
+  $('#order-items').replaceChildren(itemRow());
+  $('#order-error').hidden = true;
+  renderTotals();
+  $('#order-dialog').showModal();
+  form.querySelector('[name=itemName]').focus();
+});
+
+$('#add-item').addEventListener('click', () => {
+  $('#order-items').append(itemRow());
+  renderTotals();
+});
+
+$('#order-form').addEventListener('input', renderTotals);
+
+$('#order-form').area.addEventListener('change', (e) => {
+  $('#order-form').deliveryCharge.value = defaultDelivery(e.target.value);
+  renderTotals();
+});
+
+$('#order-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#order-error').hidden = true;
+  const submit = e.target.querySelector('button[type=submit]');
+  if (submit.disabled) return;
+  submit.disabled = true;
+  try {
+    const { summaryError } = await api(`/conversations/${state.activeId}/orders`, { method: 'POST', body: readOrderForm() });
+    $('#order-dialog').close();
+    if (summaryError) alert(`Order saved, but the summary was not sent: ${summaryError}`);
+  } catch (err) {
+    $('#order-error').textContent = err.message;
+    $('#order-error').hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+function orderQuery() {
+  const params = new URLSearchParams();
+  if ($('#orders-status').value) params.set('status', $('#orders-status').value);
+  if ($('#orders-search').value.trim()) params.set('q', $('#orders-search').value.trim());
+  return params.toString();
+}
+
+async function loadOrders() {
+  const orders = await api(`/orders?${orderQuery()}`);
+  const open = orders.filter((o) => o.status === 'confirmed' || o.status === 'shipped');
+  $('#orders-summary').textContent = `${orders.length} orders · ${taka(open.reduce((s, o) => s + o.cod_amount, 0))} COD still to collect`;
+  const head = el('tr', {}, ...['#', 'Date', 'Customer', 'Phone', 'Address', 'Products', 'COD', 'Taken by', 'Status']
+    .map((h) => el('th', {}, h)));
+  $('#orders-table').replaceChildren(head, ...orders.map((o) => {
+    const status = el('select', {
+      onchange: async (e) => {
+        try {
+          await api(`/orders/${o.id}`, { method: 'PATCH', body: { status: e.target.value } });
+        } catch (err) {
+          alert(err.message);
+          loadOrders();
+        }
+      },
+    }, ...Object.entries(STATUS_LABEL).map(([value, label]) => el('option', { value }, label)));
+    status.value = o.status;
+    return el('tr', {},
+      el('td', {}, `#${o.id}`),
+      el('td', { class: 'muted' }, timeLabel(o.created_at)),
+      el('td', {}, o.customer_name),
+      el('td', {}, o.phone),
+      el('td', {}, `${o.address}${o.area === 'outside_dhaka' ? ' (outside Dhaka)' : ''}`),
+      el('td', {}, o.items.map((i) => `${i.qty} × ${i.name}`).join(', ')),
+      el('td', { class: 'num' }, taka(o.cod_amount)),
+      el('td', { class: 'muted' }, o.created_by_name ?? ''),
+      el('td', {}, status));
+  }));
+  if (!orders.length) $('#orders-table').append(el('tr', {}, el('td', { class: 'muted', colspan: '9' }, 'No orders yet')));
+}
+
+$('#open-orders').addEventListener('click', () => {
+  loadOrders();
+  $('#orders-dialog').showModal();
+});
+$('#orders-status').addEventListener('change', loadOrders);
+let searchTimer;
+$('#orders-search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadOrders, 250);
+});
+
+$('#orders-export').addEventListener('click', async () => {
+  const res = await fetch(`/api/orders.csv?${orderQuery()}`, { headers: { authorization: `Bearer ${state.token}` } });
+  if (!res.ok) return alert('Export failed');
+  const url = URL.createObjectURL(await res.blob());
+  const a = el('a', { href: url, download: `orders-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// ---- Saved replies ------------------------------------------------------
+
+const picker = { matches: [], index: 0 };
+
+async function loadSavedReplies() {
+  state.savedReplies = await api('/saved-replies');
+}
+
+function renderPicker() {
+  const list = $('#saved-picker');
+  list.hidden = picker.matches.length === 0;
+  list.replaceChildren(...picker.matches.map((r, i) => el('li', {
+    class: i === picker.index ? 'active' : '',
+    onmousedown: (e) => { e.preventDefault(); useSavedReply(r); },
+  }, el('strong', {}, `/${r.shortcut}`), `  ${r.text}`)));
+}
+
+function useSavedReply(reply) {
+  const input = $('#composer-text');
+  input.value = reply.text;
+  picker.matches = [];
+  renderPicker();
+  input.focus();
+}
+
+$('#composer-text').addEventListener('input', (e) => {
+  const m = /^\/(\S*)$/.exec(e.target.value);
+  picker.matches = m ? state.savedReplies.filter((r) => r.shortcut.startsWith(m[1].toLowerCase())).slice(0, 8) : [];
+  picker.index = 0;
+  renderPicker();
+});
+
+// Returns true when the key was used by the saved-reply picker.
+function pickerKeydown(e) {
+  if (!picker.matches.length) return false;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    picker.index = (picker.index + (e.key === 'ArrowDown' ? 1 : -1) + picker.matches.length) % picker.matches.length;
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    useSavedReply(picker.matches[picker.index]);
+  } else if (e.key === 'Escape') {
+    picker.matches = [];
+  } else {
+    return false;
+  }
+  e.preventDefault();
+  renderPicker();
+  return true;
+}
+
+function renderSavedReplies() {
+  $('#saved-table').replaceChildren(...state.savedReplies.map((r) => el('tr', {},
+    el('td', {}, el('code', {}, `/${r.shortcut}`)),
+    el('td', {}, r.text),
+    el('td', {}, el('button', {
+      class: 'ghost',
+      onclick: async () => {
+        await api(`/saved-replies/${r.id}`, { method: 'DELETE' });
+        await loadSavedReplies();
+        renderSavedReplies();
+      },
+    }, 'Delete')))));
+}
+
+$('#add-saved').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/saved-replies', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) });
+    e.target.reset();
+    await loadSavedReplies();
+    renderSavedReplies();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+$('#delivery-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries([...new FormData(e.target)].map(([k, v]) => [k, Number(v)]));
+  try {
+    state.me.workspace = await api('/workspace', { method: 'PATCH', body });
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 // ---- Realtime -----------------------------------------------------------
 
 function connectSocket() {
@@ -373,6 +643,10 @@ function connectSocket() {
       api(`/conversations/${conversationId}/read`, { method: 'POST' }).catch(() => {});
     }
   });
+  state.socket.on('order', (order) => {
+    if (order.conversation_id === state.activeId) loadConversationOrders();
+    if ($('#orders-dialog').open) loadOrders();
+  });
   state.socket.on('connect', () => {
     if (state.me) loadConversations();
   });
@@ -393,6 +667,7 @@ async function start() {
   document.querySelectorAll('[data-owner-only]').forEach((n) => { n.hidden = !isOwner; });
   await loadTeam();
   await loadConversations();
+  await loadSavedReplies();
   connectSocket();
 }
 

@@ -84,13 +84,62 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS messages_by_external_id ON messages(external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages(conversation_id, id);
+
+-- Amounts are whole taka. items is JSON: [{ "name", "qty", "price" }].
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  conversation_id INTEGER REFERENCES conversations(id) ON DELETE SET NULL,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  customer_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  address TEXT NOT NULL,
+  area TEXT NOT NULL CHECK (area IN ('inside_dhaka', 'outside_dhaka')),
+  items TEXT NOT NULL,
+  subtotal INTEGER NOT NULL,
+  delivery_charge INTEGER NOT NULL,
+  discount INTEGER NOT NULL DEFAULT 0,
+  advance_paid INTEGER NOT NULL DEFAULT 0,
+  cod_amount INTEGER NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'cod' CHECK (payment_method IN ('cod', 'bkash', 'nagad', 'rocket', 'bank')),
+  status TEXT NOT NULL DEFAULT 'confirmed'
+    CHECK (status IN ('confirmed', 'shipped', 'delivered', 'cancelled', 'returned')),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT ${NOW},
+  updated_at TEXT NOT NULL DEFAULT ${NOW}
+);
+CREATE INDEX IF NOT EXISTS orders_by_workspace ON orders(workspace_id, status, id);
+CREATE INDEX IF NOT EXISTS orders_by_conversation ON orders(conversation_id);
+
+CREATE TABLE IF NOT EXISTS saved_replies (
+  id INTEGER PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  shortcut TEXT NOT NULL,
+  text TEXT NOT NULL,
+  UNIQUE (workspace_id, shortcut)
+);
 `;
+
+// Columns added after the first release. CREATE TABLE IF NOT EXISTS does not
+// touch existing tables, so older databases get them here.
+const ADDED_COLUMNS = [
+  ['workspaces', 'delivery_inside_dhaka', 'INTEGER NOT NULL DEFAULT 70'],
+  ['workspaces', 'delivery_outside_dhaka', 'INTEGER NOT NULL DEFAULT 130'],
+];
+
+function addMissingColumns(db) {
+  for (const [table, column, definition] of ADDED_COLUMNS) {
+    const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+    if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
 
 export function openDb(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  addMissingColumns(db);
   return db;
 }
 

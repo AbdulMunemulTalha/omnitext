@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { userForToken } from './auth.js';
 import { createInbox } from './inbox.js';
+import { createOrders } from './orders.js';
 import { apiRoutes } from './routes/api.js';
 import { webhookRoutes } from './routes/webhooks.js';
 
@@ -16,6 +17,7 @@ export function createApp(db, config, { fetchImpl } = {}) {
 
   const emit = (workspaceId, event, payload) => io.to(`workspace:${workspaceId}`).emit(event, payload);
   const inbox = createInbox(db, config, { emit, fetchImpl });
+  const orders = createOrders(db, inbox, { emit });
 
   io.use((socket, next) => {
     const user = userForToken(db, socket.handshake.auth?.token);
@@ -29,8 +31,8 @@ export function createApp(db, config, { fetchImpl } = {}) {
   app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
   app.use(webhookRoutes(config, inbox));
-  app.use('/api', apiRoutes(db, config, inbox));
+  app.use('/api', apiRoutes(db, config, inbox, orders));
   app.use(express.static(PUBLIC_DIR));
 
-  return { app, server, io, inbox };
+  return { app, server, io, inbox, orders };
 }

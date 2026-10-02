@@ -28,7 +28,8 @@
       <strong id="workspace-name"></strong>
       <span class="spacer"></span>
       <label class="duty"><input type="checkbox" id="duty-toggle"> On duty</label>
-      <button id="open-settings" class="ghost" hidden>Team &amp; channels</button>
+      <button id="open-orders" class="ghost">Orders</button>
+      <button id="open-settings" class="ghost" hidden>Settings</button>
       <span id="me-name" class="muted"></span>
       <button id="logout" class="ghost">Sign out</button>
     </header>
@@ -57,13 +58,16 @@
             <div class="muted small" id="chat-sub"></div>
           </div>
           <span class="spacer"></span>
+          <button id="new-order">New order</button>
           <select id="assign-select" hidden></select>
           <button id="toggle-status" class="ghost"></button>
         </header>
+        <div class="order-strip" id="order-strip" hidden></div>
         <div class="messages" id="messages"></div>
         <p class="notice" id="chat-notice" hidden></p>
+        <ul class="saved-picker" id="saved-picker" hidden></ul>
         <form class="composer" id="composer">
-          <textarea id="composer-text" rows="2" placeholder="Type a reply… (Enter to send, Shift+Enter for new line)"></textarea>
+          <textarea id="composer-text" rows="2" placeholder="Type a reply… (/ for saved replies, Enter to send, Shift+Enter for new line)"></textarea>
           <button type="submit">Send</button>
         </form>
       </div>
@@ -96,6 +100,22 @@
       <button>Connect</button>
     </form>
 
+    <h2>Delivery charges</h2>
+    <form id="delivery-form" class="inline-form">
+      <label class="field">Inside Dhaka (৳)<input name="deliveryInsideDhaka" type="number" min="0" step="1" required></label>
+      <label class="field">Outside Dhaka (৳)<input name="deliveryOutsideDhaka" type="number" min="0" step="1" required></label>
+      <button>Save</button>
+    </form>
+
+    <h2>Saved replies</h2>
+    <p class="muted small">Moderators type / and the shortcut in the reply box, e.g. <code>/price</code>.</p>
+    <table class="table" id="saved-table"></table>
+    <form id="add-saved" class="inline-form">
+      <input name="shortcut" placeholder="Shortcut, e.g. bkash" required style="max-width: 180px">
+      <textarea name="text" rows="2" placeholder="Reply text" required></textarea>
+      <button>Save reply</button>
+    </form>
+
     <div id="simulator" hidden>
       <h2>Test a customer message</h2>
       <p class="muted small">Development only. Pretends a customer messaged one of your channels.</p>
@@ -107,6 +127,63 @@
         <button>Send as customer</button>
       </form>
     </div>
+  </dialog>
+
+  <dialog id="order-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>New order</h2>
+    <form id="order-form" class="order-form">
+      <label class="field">Customer name<input name="customerName" required></label>
+      <label class="field">Phone<input name="phone" inputmode="tel" placeholder="01XXXXXXXXX" required></label>
+      <label class="field wide">Address<textarea name="address" rows="2" required></textarea></label>
+      <label class="field">Area
+        <select name="area">
+          <option value="inside_dhaka">Inside Dhaka</option>
+          <option value="outside_dhaka">Outside Dhaka</option>
+        </select>
+      </label>
+      <label class="field">Payment
+        <select name="paymentMethod">
+          <option value="cod">Cash on delivery</option>
+          <option value="bkash">bKash</option>
+          <option value="nagad">Nagad</option>
+          <option value="rocket">Rocket</option>
+          <option value="bank">Bank</option>
+        </select>
+      </label>
+      <div class="wide">
+        <div class="items-head muted small"><span>Product</span><span>Qty</span><span>Price (৳)</span><span></span></div>
+        <div id="order-items"></div>
+        <button type="button" class="link" id="add-item">+ Add product</button>
+      </div>
+      <label class="field">Delivery charge (৳)<input name="deliveryCharge" type="number" min="0" step="1"></label>
+      <label class="field">Discount (৳)<input name="discount" type="number" min="0" step="1" value="0"></label>
+      <label class="field">Advance paid (৳)<input name="advancePaid" type="number" min="0" step="1" value="0"></label>
+      <label class="field">Note<input name="note" placeholder="e.g. call before delivery"></label>
+      <div class="wide totals" id="order-totals"></div>
+      <label class="wide check"><input type="checkbox" name="sendSummary" checked> Send the order summary to the customer</label>
+      <p class="wide error" id="order-error" hidden></p>
+      <div class="wide"><button type="submit">Confirm order</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="orders-dialog" class="wide-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>Orders</h2>
+    <div class="inline-form">
+      <select id="orders-status">
+        <option value="">All statuses</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="shipped">Shipped</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="returned">Returned</option>
+      </select>
+      <input id="orders-search" type="search" placeholder="Search name, phone or #order">
+      <button id="orders-export" class="ghost">Export CSV</button>
+    </div>
+    <p class="muted small" id="orders-summary"></p>
+    <div class="table-scroll"><table class="table" id="orders-table"></table></div>
   </dialog>
 
   <script src="/socket.io/socket.io.js"></script>

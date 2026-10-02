@@ -79,3 +79,42 @@ test('owner can add moderators and remove them, releasing their customers', asyn
   assert.equal(ctx.db.prepare('SELECT assigned_user_id FROM conversations WHERE id = ?').get(conversation.id).assigned_user_id, null);
   assert.equal((await call('/api/me', { token: modToken })).status, 401, 'removed moderator is signed out');
 });
+
+test('orders, CSV export, saved replies and delivery settings over HTTP', async () => {
+  const ownerToken = await login('owner@shop.test');
+  const modToken = await login('nadia@shop.test');
+
+  const settings = await call('/api/workspace', { method: 'PATCH', token: ownerToken, body: { deliveryInsideDhaka: 60, deliveryOutsideDhaka: 120 } });
+  assert.deepEqual([settings.data.deliveryInsideDhaka, settings.data.deliveryOutsideDhaka], [60, 120]);
+  assert.equal((await call('/api/workspace', { method: 'PATCH', token: modToken, body: { deliveryInsideDhaka: 0 } })).status, 403);
+
+  const conversation = (await call('/api/conversations?filter=all', { token: ownerToken })).data[0];
+  const created = await call(`/api/conversations/${conversation.id}/orders`, {
+    method: 'POST',
+    token: ownerToken,
+    body: { customerName: 'Rahim', phone: '+8801711111111', address: 'Mirpur 10, Dhaka', area: 'inside_dhaka', items: [{ name: 'Shirt', qty: 1, price: 900 }], sendSummary: true },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.order.delivery_charge, 60);
+  assert.equal(created.data.order.cod_amount, 960);
+  assert.equal(created.data.order.phone, '01711111111');
+
+  const bad = await call(`/api/conversations/${conversation.id}/orders`, { method: 'POST', token: ownerToken, body: { area: 'inside_dhaka', phone: 'abc' } });
+  assert.equal(bad.status, 400);
+
+  const csv = await fetch(`${base}/api/orders.csv`, { headers: { authorization: `Bearer ${ownerToken}` } });
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-disposition'), /attachment; filename="orders-\d{4}-\d{2}-\d{2}\.csv"/);
+  const bytes = Buffer.from(await csv.arrayBuffer());
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'starts with a UTF-8 BOM for Excel');
+  const body = bytes.subarray(3).toString('utf8');
+  assert.match(body, /^order_id,/);
+  assert.match(body, /Rahim,01711111111,"Mirpur 10, Dhaka"/);
+
+  const reply = await call('/api/saved-replies', { method: 'POST', token: ownerToken, body: { shortcut: '/Price', text: 'Dam 900 taka' } });
+  assert.equal(reply.data.shortcut, 'price');
+  await call('/api/saved-replies', { method: 'POST', token: ownerToken, body: { shortcut: 'price', text: 'Dam 950 taka' } });
+  const replies = await call('/api/saved-replies', { token: modToken });
+  assert.deepEqual(replies.data.map((r) => r.text), ['Dam 950 taka']);
+  assert.equal((await call('/api/saved-replies', { method: 'POST', token: modToken, body: { shortcut: 'x', text: 'y' } })).status, 403);
+});
