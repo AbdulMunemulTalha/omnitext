@@ -301,7 +301,9 @@ async function loadChannels() {
     el('td', {}, el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform])),
     el('td', {}, c.name),
     el('td', { class: 'muted' }, c.externalId),
-    el('td', {}, c.connected ? 'Live' : 'Test mode (no token)'),
+    el('td', {}, c.needsReconnect
+      ? el('span', { class: 'warn' }, 'Facebook access expired: connect again')
+      : c.connected ? 'Live' : 'Test mode (no token)'),
     el('td', {}, el('button', {
       class: 'ghost',
       onclick: async () => {
@@ -314,15 +316,21 @@ async function loadChannels() {
   $('#simulate-channel').replaceChildren(...channels.map((c) => el('option', { value: String(c.id) }, `${PLATFORM_LABEL[c.platform]} · ${c.name}`)));
 }
 
-$('#open-settings').addEventListener('click', () => {
+function openSettings() {
   loadTeam();
   loadChannels();
   renderSavedReplies();
   const form = $('#delivery-form');
   form.deliveryInsideDhaka.value = state.me.workspace.deliveryInsideDhaka;
   form.deliveryOutsideDhaka.value = state.me.workspace.deliveryOutsideDhaka;
-  $('#settings').showModal();
-});
+  const { facebook, whatsapp } = state.me.connect;
+  $('#connect-facebook').hidden = !facebook;
+  $('#connect-whatsapp').hidden = !whatsapp;
+  $('#connect-unavailable').hidden = facebook && whatsapp;
+  if (!$('#settings').open) $('#settings').showModal();
+}
+
+$('#open-settings').addEventListener('click', openSettings);
 
 $('#add-member').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -617,6 +625,150 @@ $('#delivery-form').addEventListener('submit', async (e) => {
   }
 });
 
+// ---- One-click channel connection ----------------------------------------
+
+function showConnectResult({ connected = [], problems = [], pin = null }) {
+  const parts = [];
+  if (connected.length) parts.push(`Connected: ${connected.join(', ')}.`);
+  if (pin) parts.push(`WhatsApp two-step verification PIN: ${pin}. Write it down; Meta asks for it if the number is moved.`);
+  parts.push(...problems);
+  $('#connect-result').textContent = parts.join(' ');
+  $('#connect-result').hidden = parts.length === 0;
+  loadChannels();
+}
+
+$('#connect-facebook').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    const { url } = await api('/connect/facebook/start');
+    window.location.assign(url);
+  } catch (err) {
+    e.target.disabled = false;
+    alert(err.message);
+  }
+});
+
+// Facebook sends the owner back to /?connect=<id> (or ?connect_error=...) after login.
+async function resumeFacebookConnect() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('connect');
+  const error = params.get('connect_error');
+  if (!id && !error) return;
+  history.replaceState(null, '', window.location.pathname);
+  if (state.me.user.role !== 'owner') return;
+  openSettings();
+  if (error) {
+    showConnectResult({ problems: [error] });
+    return;
+  }
+  try {
+    const pages = await api(`/connect/facebook/${encodeURIComponent(id)}`);
+    $('#connect-form').dataset.id = id;
+    $('#connect-error').hidden = true;
+    $('#connect-pages').replaceChildren(...pages.map((p) => el('div', { class: 'connect-page' },
+      el('strong', {}, p.name),
+      el('label', {},
+        el('input', { type: 'checkbox', name: 'messenger', value: p.id, ...(p.messengerConnected ? {} : { checked: '' }) }),
+        el('span', { class: 'badge messenger' }, 'Messenger'), p.messengerConnected ? 'Already connected (reconnect)' : 'Page messages'),
+      p.instagram
+        ? el('label', {},
+          el('input', { type: 'checkbox', name: 'instagram', value: p.instagram.id, ...(p.instagram.connected ? {} : { checked: '' }) }),
+          el('span', { class: 'badge instagram' }, 'Instagram'),
+          `${p.instagram.username ? `@${p.instagram.username}` : 'Linked account'}${p.instagram.connected ? ' · already connected (reconnect)' : ''}`)
+        : el('span', { class: 'muted small' }, 'No Instagram account is linked to this Page.'))));
+    $('#connect-dialog').showModal();
+  } catch (err) {
+    showConnectResult({ problems: [err.message] });
+  }
+}
+
+$('#connect-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const picked = (name) => [...form.querySelectorAll(`input[name=${name}]:checked`)].map((i) => i.value);
+  const submit = form.querySelector('button[type=submit]');
+  submit.disabled = true;
+  try {
+    const result = await api(`/connect/facebook/${encodeURIComponent(form.dataset.id)}`, {
+      method: 'POST', body: { messenger: picked('messenger'), instagram: picked('instagram') },
+    });
+    $('#connect-dialog').close();
+    showConnectResult(result);
+  } catch (err) {
+    $('#connect-error').textContent = err.message;
+    $('#connect-error').hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+// WhatsApp uses Meta's Embedded Signup popup from the Facebook JavaScript SDK.
+function loadFacebookSdk() {
+  if (window.FB) return Promise.resolve(window.FB);
+  return new Promise((resolve, reject) => {
+    window.fbAsyncInit = () => {
+      window.FB.init({ appId: state.me.connect.appId, autoLogAppEvents: true, xfbml: false, version: state.me.connect.graphVersion });
+      resolve(window.FB);
+    };
+    const script = el('script', { src: 'https://connect.facebook.net/en_US/sdk.js', async: '', crossorigin: 'anonymous' });
+    script.onerror = () => reject(new Error('Could not load Facebook. Check the internet connection or turn off ad blockers.'));
+    document.body.append(script);
+  });
+}
+
+let embeddedSignup = null;
+window.addEventListener('message', (event) => {
+  let host;
+  try { host = new URL(event.origin).hostname; } catch { return; }
+  if (host !== 'facebook.com' && !host.endsWith('.facebook.com')) return;
+  let data;
+  try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
+  if (data?.type !== 'WA_EMBEDDED_SIGNUP') return;
+  embeddedSignup = { event: data.event, phoneNumberId: data.data?.phone_number_id, wabaId: data.data?.waba_id };
+});
+
+async function waitForSignupInfo() {
+  for (let i = 0; i < 30 && !embeddedSignup; i += 1) await new Promise((r) => setTimeout(r, 100));
+  return embeddedSignup;
+}
+
+async function finishWhatsApp(code) {
+  const info = await waitForSignupInfo();
+  if (!info || info.event !== 'FINISH' || !info.phoneNumberId) {
+    showConnectResult({ problems: ['WhatsApp signup was not finished. Please choose or add a phone number and try again.'] });
+    return;
+  }
+  try {
+    showConnectResult(await api('/connect/whatsapp', {
+      method: 'POST', body: { code, phoneNumberId: info.phoneNumberId, wabaId: info.wabaId },
+    }));
+  } catch (err) {
+    showConnectResult({ problems: [err.message] });
+  }
+}
+
+$('#connect-whatsapp').addEventListener('click', async (e) => {
+  const button = e.target;
+  button.disabled = true;
+  embeddedSignup = null;
+  try {
+    const FB = await loadFacebookSdk();
+    FB.login((response) => {
+      const code = response.authResponse?.code;
+      const done = code ? finishWhatsApp(code) : Promise.resolve(showConnectResult({ problems: ['WhatsApp signup was cancelled.'] }));
+      done.finally(() => { button.disabled = false; });
+    }, {
+      config_id: state.me.connect.whatsappConfigId,
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+    });
+  } catch (err) {
+    button.disabled = false;
+    alert(err.message);
+  }
+});
+
 // ---- Realtime -----------------------------------------------------------
 
 function connectSocket() {
@@ -642,6 +794,9 @@ function connectSocket() {
     if (message.direction === 'in' && !document.hidden && (c?.assigned_user_id === state.me.user.id || state.me.user.role === 'owner')) {
       api(`/conversations/${conversationId}/read`, { method: 'POST' }).catch(() => {});
     }
+  });
+  state.socket.on('channels', () => {
+    if ($('#settings').open) loadChannels();
   });
   state.socket.on('order', (order) => {
     if (order.conversation_id === state.activeId) loadConversationOrders();
@@ -669,6 +824,7 @@ async function start() {
   await loadConversations();
   await loadSavedReplies();
   connectSocket();
+  resumeFacebookConnect();
 }
 
 if (state.token) start().catch(showAuth);

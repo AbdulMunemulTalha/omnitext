@@ -4,6 +4,7 @@ import { transaction } from '../db.js';
 import { hashPassword, verifyPassword, createSession, deleteSession, bearerToken, requireAuth, requireOwner } from '../auth.js';
 import { InboxError } from '../inbox.js';
 import { ordersCsv } from '../orders.js';
+import { encryptSecret } from '../secrets.js';
 
 const PLATFORMS = ['messenger', 'instagram', 'whatsapp'];
 
@@ -14,6 +15,7 @@ const publicUser = (u) => ({
 
 const publicChannel = (c) => ({
   id: c.id, platform: c.platform, externalId: c.external_id, name: c.name, connected: Boolean(c.access_token),
+  needsReconnect: Boolean(c.needs_reconnect),
 });
 
 const publicWorkspace = (w) => ({
@@ -66,6 +68,13 @@ export function apiRoutes(db, config, inbox, orders) {
       user: publicUser(req.user),
       workspace: publicWorkspace(ws),
       devTools: !config.isProduction,
+      connect: {
+        facebook: Boolean(config.meta.appId && config.meta.appSecret),
+        whatsapp: Boolean(config.meta.appId && config.meta.appSecret && config.meta.whatsappConfigId),
+        appId: config.meta.appId,
+        whatsappConfigId: config.meta.whatsappConfigId,
+        graphVersion: config.meta.graphVersion,
+      },
     });
   });
 
@@ -206,7 +215,8 @@ export function apiRoutes(db, config, inbox, orders) {
       throw new InboxError(409, 'This account is already connected');
     }
     const { lastInsertRowid } = db.prepare(`INSERT INTO channels (workspace_id, platform, external_id, name, access_token)
-      VALUES (?, ?, ?, ?, ?)`).run(req.user.workspace_id, platform, externalId.trim(), name.trim(), String(accessToken).trim());
+      VALUES (?, ?, ?, ?, ?)`).run(req.user.workspace_id, platform, externalId.trim(), name.trim(),
+      encryptSecret(String(accessToken).trim(), config.tokenKey));
     res.status(201).json(publicChannel(db.prepare('SELECT * FROM channels WHERE id = ?').get(lastInsertRowid)));
   });
 

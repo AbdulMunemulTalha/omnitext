@@ -111,6 +111,24 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS orders_by_workspace ON orders(workspace_id, status, id);
 CREATE INDEX IF NOT EXISTS orders_by_conversation ON orders(conversation_id);
 
+-- Ties a Facebook login redirect back to the owner who started it.
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state TEXT PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  redirect_uri TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
+-- Pages found after a Facebook login, waiting for the owner to pick which to
+-- connect. payload holds page tokens, so it is encrypted like channel tokens.
+CREATE TABLE IF NOT EXISTS pending_connections (
+  id TEXT PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  payload TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS saved_replies (
   id INTEGER PRIMARY KEY,
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -125,6 +143,9 @@ CREATE TABLE IF NOT EXISTS saved_replies (
 const ADDED_COLUMNS = [
   ['workspaces', 'delivery_inside_dhaka', 'INTEGER NOT NULL DEFAULT 70'],
   ['workspaces', 'delivery_outside_dhaka', 'INTEGER NOT NULL DEFAULT 130'],
+  // Set when Meta rejects the stored token, so the owner knows to reconnect.
+  ['channels', 'needs_reconnect', 'INTEGER NOT NULL DEFAULT 0'],
+  ['channels', 'waba_id', 'TEXT'],
 ];
 
 function addMissingColumns(db) {

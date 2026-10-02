@@ -7,6 +7,7 @@ import { createInbox } from './inbox.js';
 import { createOrders } from './orders.js';
 import { apiRoutes } from './routes/api.js';
 import { webhookRoutes } from './routes/webhooks.js';
+import { connectRoutes } from './routes/connect.js';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
 
@@ -31,6 +32,7 @@ export function createApp(db, config, { fetchImpl } = {}) {
   app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
   app.use(webhookRoutes(config, inbox));
+  app.use(connectRoutes(db, config, { fetchImpl, emit }));
   app.use('/api', apiRoutes(db, config, inbox, orders));
   app.use(express.static(PUBLIC_DIR));
 

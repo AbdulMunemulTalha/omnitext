@@ -118,18 +118,33 @@ export function messagingWindow(platform, lastInboundAt, now = Date.now()) {
   };
 }
 
-export class SendError extends Error {}
+export class MetaApiError extends Error {
+  constructor(message, code = null) {
+    super(message);
+    this.code = code;
+  }
+}
 
-async function graphPost(url, accessToken, payload, fetchImpl) {
+// Meta's error code for an expired, revoked or otherwise invalid access token.
+export const INVALID_TOKEN = 190;
+
+export async function graphRequest(url, { method = 'GET', accessToken, body, fetchImpl = globalThis.fetch } = {}) {
   const res = await fetchImpl(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify(payload),
+    method,
+    headers: {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new SendError(data?.error?.message || `Meta API returned ${res.status}`);
+  if (!res.ok || data?.error) {
+    throw new MetaApiError(data?.error?.message || `Meta API returned ${res.status}`, data?.error?.code ?? null);
+  }
   return data;
 }
+
+const graphPost = (url, accessToken, body, fetchImpl) => graphRequest(url, { method: 'POST', accessToken, body, fetchImpl });
 
 export async function sendText({ channel, contact, text, tag, graphVersion, dryRun, fetchImpl = globalThis.fetch }) {
   if (dryRun || !channel.access_token) return { externalId: `dry_${randomBytes(8).toString('hex')}` };

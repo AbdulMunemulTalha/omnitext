@@ -1,6 +1,7 @@
 import { transaction, nowIso } from './db.js';
 import { ensureAssigned, assignConversation, distributeUnassigned } from './assignment.js';
-import { messagingWindow, sendText } from './platforms/meta.js';
+import { messagingWindow, sendText, INVALID_TOKEN } from './platforms/meta.js';
+import { decryptSecret } from './secrets.js';
 
 export class InboxError extends Error {
   constructor(status, message) {
@@ -164,12 +165,17 @@ export function createInbox(db, config, { emit = () => {}, fetchImpl } = {}) {
 
       try {
         const { externalId } = await sendText({
-          channel, contact, text, tag: window.tag,
+          channel: { ...channel, access_token: decryptSecret(channel.access_token, config.tokenKey) },
+          contact, text, tag: window.tag,
           graphVersion: config.meta.graphVersion, dryRun: config.dryRun, fetchImpl,
         });
         db.prepare("UPDATE messages SET status = 'sent', external_id = ? WHERE id = ?").run(externalId, messageId);
       } catch (err) {
         db.prepare("UPDATE messages SET status = 'failed', error = ? WHERE id = ?").run(err.message, messageId);
+        if (err.code === INVALID_TOKEN) {
+          db.prepare('UPDATE channels SET needs_reconnect = 1 WHERE id = ?').run(channel.id);
+          emit(conversation.workspace_id, 'channels', null);
+        }
       }
       publish(conversationId, messageId);
       return getMessage(messageId);

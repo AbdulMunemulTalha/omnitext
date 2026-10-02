@@ -88,6 +88,17 @@
 
     <h2>Connected channels</h2>
     <table class="table" id="channel-table"></table>
+    <div class="connect-buttons">
+      <button type="button" id="connect-facebook" class="brand-facebook">Connect Facebook Page &amp; Instagram</button>
+      <button type="button" id="connect-whatsapp" class="brand-whatsapp">Connect WhatsApp</button>
+    </div>
+    <p class="muted small" id="connect-unavailable" hidden>
+      One-click connection needs the server's Meta app settings (META_APP_ID, META_APP_SECRET and, for WhatsApp,
+      META_WHATSAPP_CONFIG_ID). You can still connect manually below.
+    </p>
+    <p class="notice" id="connect-result" hidden></p>
+    <details class="manual-connect">
+      <summary class="muted small">Connect manually with an ID and access token (advanced)</summary>
     <form id="add-channel" class="inline-form">
       <select name="platform">
         <option value="messenger">Facebook Page</option>
@@ -99,6 +110,7 @@
       <input name="accessToken" placeholder="Access token (blank = test mode)">
       <button>Connect</button>
     </form>
+    </details>
 
     <h2>Delivery charges</h2>
     <form id="delivery-form" class="inline-form">
@@ -127,6 +139,17 @@
         <button>Send as customer</button>
       </form>
     </div>
+  </dialog>
+
+  <dialog id="connect-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Cancel</button></form>
+    <h2>Choose what to connect</h2>
+    <p class="muted small">Messages from what you tick will arrive in this inbox. Instagram accounts appear here when they are linked to the Facebook Page.</p>
+    <form id="connect-form">
+      <div id="connect-pages" class="connect-pages"></div>
+      <p class="error" id="connect-error" hidden></p>
+      <button type="submit">Connect selected</button>
+    </form>
   </dialog>
 
   <dialog id="order-dialog">

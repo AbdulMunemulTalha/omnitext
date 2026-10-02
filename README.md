@@ -42,7 +42,7 @@ npm run seed          # demo shop: owner@demo.test, nadia@demo.test, karim@demo.
 DRY_RUN=1 npm start   # http://localhost:3000
 ```
 
-Sign in as the owner in one browser window and as the moderators in two private windows. Under **Team & channels → Test a customer message** you can play a customer writing in, and watch the message reach a moderator live.
+Sign in as the owner in one browser window and as the moderators in two private windows. Under **Settings → Test a customer message** you can play a customer writing in, and watch the message reach a moderator live.
 
 ```bash
 npm test
@@ -57,16 +57,55 @@ All three channels use one Meta app and one webhook URL: `https://<your-domain>/
    - Messenger: `messages`, `message_echoes`
    - Instagram: `messages`
    - WhatsApp: `messages`
-3. In **Team & channels → Connected channels**, add each account:
-   - **Facebook Page:** Page ID plus a Page access token.
-   - **Instagram:** Instagram professional account ID plus the access token of the linked Facebook Page.
-   - **WhatsApp:** Phone number ID (not the phone number) plus a system-user access token.
+3. Set up one-click connection (next section). After that, sellers connect their accounts themselves from **Settings → Connected channels**.
+
+### One-click connection
+
+**Facebook Page and Instagram**
+
+1. The owner clicks **Connect Facebook Page & Instagram** and logs in to Facebook.
+2. They tick their Pages. Facebook sends them back to the dashboard.
+3. They choose which Pages, and which Instagram accounts linked to those Pages, should come into the inbox.
+4. OmniText then:
+   - subscribes each chosen Page to the app's webhooks
+   - saves each Page's token, which doesn't expire because it comes from a long-lived login
+
+**WhatsApp**
+
+1. The owner clicks **Connect WhatsApp**. Meta's Embedded Signup popup opens.
+2. In the popup, they create or choose a WhatsApp Business account and verify a phone number.
+3. OmniText then:
+   - exchanges the signup code for a business token
+   - subscribes the app to the WhatsApp Business account
+   - registers the number for the Cloud API, and shows the owner the six-digit two-step verification PIN once
+
+**Setup in the Meta app dashboard**
+
+- **Facebook Login for Business → Settings:**
+  - Add `https://<your-domain>/auth/facebook/callback` to **Valid OAuth Redirect URIs**.
+  - Turn on **Login with the JavaScript SDK**.
+  - Add your domain to **Allowed Domains for the JavaScript SDK**. HTTPS is required.
+- **Facebook Login for Business → Configurations:**
+  - **Optional** (`META_LOGIN_CONFIG_ID`): a configuration with the permissions `pages_show_list`, `pages_messaging`, `pages_manage_metadata`, `pages_read_engagement`, `instagram_basic`, `instagram_manage_messages` and `business_management`. Without it, the login asks for these permissions directly.
+  - **For WhatsApp** (`META_WHATSAPP_CONFIG_ID`): a configuration using the **WhatsApp Embedded Signup** variation, with `whatsapp_business_management` and `whatsapp_business_messaging`.
+- **App Review:** Until the app passes App Review and is switched to Live, only people with a role on the app (admins, developers, testers) can connect. That's fine for testing with your own Page and number.
+
+**Reconnecting**
+
+- If Meta stops accepting a stored token (for example, the seller changed their Facebook password or removed the app), the channel shows **"Facebook access expired: connect again"**.
+- Connecting the same Page or number again refreshes the token. Its conversations are kept.
+- A Page can belong to only one OmniText account at a time.
+
+The manual form (ID plus access token) is still under **Connect manually (advanced)**. Use it for testing, or for system-user tokens you create yourself.
 
 | Variable | Purpose |
 | --- | --- |
-| `META_APP_SECRET` | Checks the `X-Hub-Signature-256` signature on webhooks. Required in production. |
+| `META_APP_ID`, `META_APP_SECRET` | Your Meta app. Turns on one-click connection and checks the `X-Hub-Signature-256` signature on webhooks. The secret is required in production. |
 | `META_VERIFY_TOKEN` | Any string you choose. It must match the one in the Meta dashboard. |
-| `META_APP_ID` | Lets the app ignore Messenger/Instagram echoes of replies it sent itself. |
+| `META_LOGIN_CONFIG_ID` | Optional Facebook Login for Business configuration for Messenger and Instagram. |
+| `META_WHATSAPP_CONFIG_ID` | Embedded Signup configuration. Turns on **Connect WhatsApp**. |
+| `PUBLIC_URL` | Your public https address, e.g. `https://inbox.example.com`. Used to build the login redirect. Set it when running behind a proxy or load balancer. |
+| `TOKEN_ENCRYPTION_KEY` | 32 random bytes as hex. Access tokens are stored encrypted with AES-256-GCM. Required in production; the server won't start without it. Create one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Keep it safe: if it's lost, every channel has to be connected again. |
 | `META_GRAPH_VERSION` | Graph API version. Defaults to `v23.0`. |
 | `DATABASE_PATH` | SQLite file location. Defaults to `data/omnitext.db`. |
 | `DRY_RUN` | `1` stores replies without sending them to Meta. |
@@ -98,6 +137,8 @@ src/
   inbox.js             storing messages, replies, permissions
   orders.js            order validation, totals, summary message, CSV
   platforms/meta.js    webhook parsing, signatures, Send API, messaging windows
+  platforms/metaConnect.js  Facebook login, Page listing, WhatsApp Embedded Signup
+  secrets.js           access token encryption
   routes/              REST API and the webhook endpoint
 public/                dashboard (plain HTML/JS, no build step)
 test/                  node:test suites
@@ -105,11 +146,10 @@ test/                  node:test suites
 
 ## Roadmap
 
-1. **Connect Facebook in one click:** Facebook Login for Business plus WhatsApp Embedded Signup, so sellers don't paste IDs and tokens. Store tokens encrypted.
-2. **Courier booking:** Send orders straight to Steadfast, Pathao or RedX through their APIs, and save the tracking code on the order. A product catalog with stock, so moderators pick products instead of typing them.
-3. **Order summary in Bangla:** Let the owner edit the summary message, including the language.
-4. **WhatsApp templates and media:** Send templates after 24 hours, and show WhatsApp images and voice notes.
-5. **One customer across apps:** Link a customer who writes on both Messenger and WhatsApp, so the same moderator gets both.
-6. **Facebook post comments:** Handle "price?" comments under posts (`feed` webhook) and reply privately.
-7. **Reports and billing:** Response time and orders per moderator. Plans billed per seat or per channel, with bKash/SSLCommerz payments.
-8. **Scaling:** Postgres and a job queue for webhook processing once a single SQLite file is no longer enough.
+1. **Courier booking:** Send orders straight to Steadfast, Pathao or RedX through their APIs, and save the tracking code on the order. A product catalog with stock, so moderators pick products instead of typing them.
+2. **Order summary in Bangla:** Let the owner edit the summary message, including the language.
+3. **WhatsApp templates and media:** Send templates after 24 hours, and show WhatsApp images and voice notes.
+4. **One customer across apps:** Link a customer who writes on both Messenger and WhatsApp, so the same moderator gets both.
+5. **Facebook post comments:** Handle "price?" comments under posts (`feed` webhook) and reply privately.
+6. **Reports and billing:** Response time and orders per moderator. Plans billed per seat or per channel, with bKash/SSLCommerz payments.
+7. **Scaling:** Postgres and a job queue for webhook processing once a single SQLite file is no longer enough.
