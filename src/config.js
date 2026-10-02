@@ -11,6 +11,12 @@ export function loadConfig(env = process.env) {
     // Falls back to the address the request came in on.
     publicUrl: (env.PUBLIC_URL || '').replace(/\/+$/, ''),
     tokenKey: parseKey(env.TOKEN_ENCRYPTION_KEY),
+    // Shown on the privacy policy, terms and data deletion pages.
+    legal: {
+      operator: env.OPERATOR_NAME || 'OmniText',
+      supportEmail: env.SUPPORT_EMAIL || '',
+      updated: env.LEGAL_UPDATED || '2 October 2026',
+    },
     meta: {
       appId: env.META_APP_ID || '',
       appSecret: env.META_APP_SECRET || '',

@@ -48,6 +48,67 @@ Sign in as the owner in one browser window and as the moderators in two private 
 npm test
 ```
 
+## Deploying
+
+OmniText needs a public **https** address: Meta won't send webhooks or finish a Facebook login otherwise. The examples use `creatorsstory.com`; replace it with your domain.
+
+First, create the `.env` file from `.env.example`:
+
+- `META_APP_SECRET`: from App settings → Basic in the Meta dashboard.
+- `META_VERIFY_TOKEN` and `TOKEN_ENCRYPTION_KEY`: generate each one with the command written next to it in `.env.example`.
+- **Back up** `TOKEN_ENCRYPTION_KEY` somewhere safe. If it's lost, every channel has to be connected again.
+
+### Option A: VPS with Docker (recommended)
+
+You need any Linux server with Docker installed.
+
+1. Point the domain's DNS **A record** at the server's IP address.
+2. Run:
+
+```bash
+git clone https://github.com/AbdulMunemulTalha/omnitext.git && cd omnitext
+cp .env.example .env && nano .env      # fill in the secrets
+docker compose up -d --build
+```
+
+Caddy gets the HTTPS certificate for you. The database is stored in the `omnitext-data` volume. To update later, run `git pull && docker compose up -d --build`.
+
+### Option B: cPanel hosting ("Setup Node.js App")
+
+1. In cPanel, open **Setup Node.js App** and create an application:
+   - **Node.js version:** 22.13 or newer. If your host doesn't offer it, use Option A.
+   - **Application root:** the folder you uploaded the code to.
+   - **Application URL:** your domain.
+   - **Startup file:** `src/server.js`.
+2. Add every line from `.env.example` as an environment variable. Leave out `PORT`; cPanel sets it.
+3. Click **Run NPM Install**, then **Restart**.
+4. Turn on HTTPS for the domain with cPanel's SSL/TLS tool or AutoSSL.
+
+### Check it
+
+Open these in a browser:
+
+- `https://creatorsstory.com/healthz` should show `{"ok":true}`.
+- `https://creatorsstory.com/privacy` should show the privacy policy.
+
+Then open `https://creatorsstory.com`, create your business account, and continue with **Meta app settings** below.
+
+### Meta app settings for this domain
+
+Values to enter for the OmniText app (`1113995110986950`):
+
+| Where in the Meta dashboard | Value |
+| --- | --- |
+| App settings → Basic → Privacy policy URL | `https://creatorsstory.com/privacy` |
+| App settings → Basic → Terms of service URL | `https://creatorsstory.com/terms` |
+| App settings → Basic → User data deletion → Data deletion instructions URL | `https://creatorsstory.com/data-deletion` |
+| App settings → Basic → App domains | `creatorsstory.com` |
+| Facebook Login for Business → Settings → Valid OAuth Redirect URIs | `https://creatorsstory.com/auth/facebook/callback` |
+| Facebook Login for Business → Settings → Login with the JavaScript SDK | On |
+| Facebook Login for Business → Settings → Allowed Domains for the JavaScript SDK | `https://creatorsstory.com` |
+| Webhooks (Messenger/Page, Instagram, WhatsApp Business Account): callback URL | `https://creatorsstory.com/webhooks/meta` |
+| Webhooks: verify token | The `META_VERIFY_TOKEN` from your `.env` |
+
 ## Connecting real channels
 
 All three channels use one Meta app and one webhook URL: `https://<your-domain>/webhooks/meta`.
