@@ -73,6 +73,32 @@ docker compose up -d --build
 
 Caddy gets the HTTPS certificate for you. The database is stored in the `omnitext-data` volume. To update later, run `git pull && docker compose up -d --build`.
 
+### Option A2: Hostinger VPS that already runs another site
+
+Use `deploy/hostinger/docker-compose.yml` when another project's web server already uses ports 80 and 443.
+
+1. Create a project in hPanel → VPS → **Docker Manager** from that file. Name it `omnitext`, and put the `.env` values in its environment.
+   - It runs as its own project, with its own data volume and network, and uses no public ports.
+   - It downloads the branch from GitHub on every start, so **restarting the project deploys the latest code**.
+2. Let the existing web server forward the domain to OmniText. If that server is Caddy, run this in the VPS terminal (change the folder and container names to match yours):
+
+```bash
+docker network connect omnitext_edge bwg-portal-caddy-1
+cp /opt/bwg-portal/Caddyfile /opt/bwg-portal/Caddyfile.bak
+printf '\n# OmniText (temporary test domain)\ncreatorsstory.com {\n\treverse_proxy omnitext-app:3000\n}\n' >> /opt/bwg-portal/Caddyfile
+docker exec bwg-portal-caddy-1 caddy reload --config /etc/caddy/Caddyfile
+```
+
+If the new config has a mistake, `caddy reload` rejects it and the old config keeps running. Recreating the other project's Caddy container removes the network connection, so run the first line again after that.
+
+To undo all of it, run:
+
+```bash
+cp /opt/bwg-portal/Caddyfile.bak /opt/bwg-portal/Caddyfile
+docker exec bwg-portal-caddy-1 caddy reload --config /etc/caddy/Caddyfile
+docker network disconnect omnitext_edge bwg-portal-caddy-1
+```
+
 ### Option B: cPanel hosting ("Setup Node.js App")
 
 1. In cPanel, open **Setup Node.js App** and create an application:
