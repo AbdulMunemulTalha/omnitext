@@ -50,7 +50,7 @@ npm test
 
 ## Deploying
 
-OmniText needs a public **https** address: Meta won't send webhooks or finish a Facebook login otherwise. The examples use `creatorsstory.com`; replace it with your domain.
+OmniText needs a public **https** address: Meta won't send webhooks or finish a Facebook login otherwise. The examples use `omnitext.creatorsstory.com`; replace it with your domain.
 
 First, create the `.env` file from `.env.example`:
 
@@ -85,7 +85,7 @@ Use `deploy/hostinger/docker-compose.yml` when another project's web server alre
 ```bash
 docker network connect omnitext_edge bwg-portal-caddy-1
 cp /opt/bwg-portal/Caddyfile /opt/bwg-portal/Caddyfile.bak
-printf '\n# OmniText (temporary test domain)\ncreatorsstory.com {\n\treverse_proxy omnitext-app:3000\n}\n' >> /opt/bwg-portal/Caddyfile
+printf '\n# OmniText (temporary test domain)\nomnitext.creatorsstory.com {\n\treverse_proxy omnitext-app:3000\n}\n' >> /opt/bwg-portal/Caddyfile
 docker exec bwg-portal-caddy-1 caddy reload --config /etc/caddy/Caddyfile
 ```
 
@@ -114,10 +114,10 @@ docker network disconnect omnitext_edge bwg-portal-caddy-1
 
 Open these in a browser:
 
-- `https://creatorsstory.com/healthz` should show `{"ok":true}`.
-- `https://creatorsstory.com/privacy` should show the privacy policy.
+- `https://omnitext.creatorsstory.com/healthz` should show `{"ok":true}`.
+- `https://omnitext.creatorsstory.com/privacy` should show the privacy policy.
 
-Then open `https://creatorsstory.com`, create your business account, and continue with **Meta app settings** below.
+Then open `https://omnitext.creatorsstory.com`, create your business account, and continue with **Meta app settings** below.
 
 ### Meta app settings for this domain
 
@@ -125,14 +125,14 @@ Values to enter for the OmniText app (`1113995110986950`):
 
 | Where in the Meta dashboard | Value |
 | --- | --- |
-| App settings → Basic → Privacy policy URL | `https://creatorsstory.com/privacy` |
-| App settings → Basic → Terms of service URL | `https://creatorsstory.com/terms` |
-| App settings → Basic → User data deletion → Data deletion instructions URL | `https://creatorsstory.com/data-deletion` |
-| App settings → Basic → App domains | `creatorsstory.com` |
-| Facebook Login for Business → Settings → Valid OAuth Redirect URIs | `https://creatorsstory.com/auth/facebook/callback` |
+| App settings → Basic → Privacy policy URL | `https://omnitext.creatorsstory.com/privacy` |
+| App settings → Basic → Terms of service URL | `https://omnitext.creatorsstory.com/terms` |
+| App settings → Basic → User data deletion → Data deletion instructions URL | `https://omnitext.creatorsstory.com/data-deletion` |
+| App settings → Basic → App domains | `omnitext.creatorsstory.com` |
+| Facebook Login for Business → Settings → Valid OAuth Redirect URIs | `https://omnitext.creatorsstory.com/auth/facebook/callback` |
 | Facebook Login for Business → Settings → Login with the JavaScript SDK | On |
-| Facebook Login for Business → Settings → Allowed Domains for the JavaScript SDK | `https://creatorsstory.com` |
-| Webhooks (Messenger/Page, Instagram, WhatsApp Business Account): callback URL | `https://creatorsstory.com/webhooks/meta` |
+| Facebook Login for Business → Settings → Allowed Domains for the JavaScript SDK | `https://omnitext.creatorsstory.com` |
+| Webhooks (Messenger/Page, Instagram, WhatsApp Business Account): callback URL | `https://omnitext.creatorsstory.com/webhooks/meta` |
 | Webhooks: verify token | The `META_VERIFY_TOKEN` from your `.env` |
 
 ## Connecting real channels

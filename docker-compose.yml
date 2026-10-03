@@ -14,7 +14,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    command: caddy reverse-proxy --from ${DOMAIN:-creatorsstory.com} --to omnitext:3000
+    command: caddy reverse-proxy --from ${DOMAIN:-omnitext.creatorsstory.com} --to omnitext:3000
     volumes:
       - caddy-data:/data
     depends_on:
