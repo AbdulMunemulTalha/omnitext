@@ -1,5 +1,10 @@
 import { parseKey } from './secrets.js';
 
+// Values pasted into hosting dashboards often pick up spaces or quotes.
+function cleanSecret(value) {
+  return String(value ?? '').trim().replace(/^(['"])(.*)\1$/, '$2').trim();
+}
+
 export function loadConfig(env = process.env) {
   return {
     port: Number(env.PORT || 3000),
@@ -19,7 +24,7 @@ export function loadConfig(env = process.env) {
     },
     meta: {
       appId: env.META_APP_ID || '',
-      appSecret: env.META_APP_SECRET || '',
+      appSecret: cleanSecret(env.META_APP_SECRET),
       verifyToken: env.META_VERIFY_TOKEN || '',
       graphVersion: env.META_GRAPH_VERSION || 'v23.0',
       // Facebook Login for Business configuration (Messenger + Instagram permissions).

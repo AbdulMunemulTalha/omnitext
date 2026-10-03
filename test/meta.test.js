@@ -81,3 +81,11 @@ test('enforces Meta messaging windows', () => {
   assert.equal(messagingWindow('instagram', hoursAgo(24 * 8), now).ok, false);
   assert.equal(messagingWindow('messenger', null, now).ok, false);
 });
+
+test('cleans pasted app secrets', async () => {
+  const { loadConfig } = await import('../src/config.js');
+  for (const raw of ['abc123', ' abc123 ', '"abc123"', "'abc123'\n"]) {
+    assert.equal(loadConfig({ META_APP_SECRET: raw }).meta.appSecret, 'abc123', JSON.stringify(raw));
+  }
+  assert.equal(loadConfig({}).meta.appSecret, '');
+});

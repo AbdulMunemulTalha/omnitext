@@ -17,7 +17,10 @@ export function webhookRoutes(config, inbox) {
   router.post('/webhooks/meta', (req, res) => {
     if (config.meta.appSecret) {
       if (!verifySignature(req.rawBody, req.get('x-hub-signature-256'), config.meta.appSecret)) {
-        console.warn(`webhook rejected: bad or missing signature (object=${req.body?.object ?? '?'})`);
+        // Never log the secret itself; its length is enough to spot a bad paste (Meta's are 32 characters).
+        console.warn(`webhook rejected: bad or missing signature (object=${req.body?.object ?? '?'}, `
+          + `signature header ${req.get('x-hub-signature-256') ? 'present' : 'missing'}, `
+          + `app secret length ${config.meta.appSecret.length})`);
         return res.sendStatus(401);
       }
     } else if (config.isProduction) {
