@@ -34,6 +34,13 @@ export function webhookRoutes(config, inbox) {
       try {
         const result = inbox.ingestMessage(message);
         outcome[result.ignored ? 'ignored' : 'stored'] += 1;
+        // Enough to trace a message without logging what the customer wrote.
+        const kinds = message.attachments.map((at) => at.type).join(',') || 'none';
+        const where = result.ignored
+          ? `ignored: ${result.ignored} (${message.platform} account ${message.channelExternalId})`
+          : `shop ${result.conversation.workspace_id}, conversation ${result.conversation.id}`;
+        console.log(`  ${message.direction === 'in' ? 'customer message' : 'sent by the page/account itself'}: `
+          + `${where}, text ${message.text.length} chars, attachments ${kinds}`);
       } catch (err) {
         outcome.failed += 1;
         console.error('Failed to store webhook message', message.messageId, err);
