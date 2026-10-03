@@ -3,20 +3,37 @@
 # volume, its own network, and no published ports. The existing web server
 # reaches it over the "omnitext_edge" network at http://omnitext-app:3000.
 #
-# The code is built straight from GitHub, so redeploying picks up new pushes.
+# Docker Manager runs images but does not build them, so the stock Node image
+# downloads the code from GitHub on every start. Restarting the project
+# therefore deploys the latest push to the branch below.
 services:
   app:
-    build:
-      context: https://github.com/AbdulMunemulTalha/omnitext.git#claude/bd-ecom-messaging-saas-73p1up
+    image: node:22-alpine
     restart: unless-stopped
+    working_dir: /srv
+    command:
+      - sh
+      - -c
+      - >-
+        set -e;
+        rm -rf /srv/omnitext && mkdir -p /srv/omnitext && cd /srv/omnitext;
+        wget -qO- "https://codeload.github.com/AbdulMunemulTalha/omnitext/tar.gz/refs/heads/$${OMNITEXT_BRANCH}" | tar xz --strip-components=1;
+        npm ci --omit=dev --no-audit --no-fund;
+        exec node --disable-warning=ExperimentalWarning src/server.js
     env_file:
       - .env
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_PATH: /app/data/omnitext.db
+      DATABASE_PATH: /data/omnitext.db
+      OMNITEXT_BRANCH: claude/bd-ecom-messaging-saas-73p1up
     volumes:
-      - omnitext_data:/app/data
+      - omnitext_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
     networks:
       edge:
         aliases:
