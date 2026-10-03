@@ -167,3 +167,13 @@ export async function sendText({ channel, contact, text, tag, graphVersion, dryR
   const data = await graphPost(`${base}/me/messages`, channel.access_token, payload, fetchImpl);
   return { externalId: data.message_id ?? null };
 }
+
+// Webhooks only carry a page-scoped ID (PSID / IGSID). The name has to be
+// read from the User Profile API with the Page's token.
+export async function fetchProfileName({ platform, userId, accessToken, graphVersion, fetchImpl = globalThis.fetch }) {
+  const fields = platform === 'instagram' ? 'name,username' : 'first_name,last_name';
+  const url = `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(userId)}?fields=${fields}`;
+  const data = await graphRequest(url, { accessToken, fetchImpl });
+  const fullName = data.name || [data.first_name, data.last_name].filter(Boolean).join(' ');
+  return fullName || (data.username ? `@${data.username}` : null);
+}

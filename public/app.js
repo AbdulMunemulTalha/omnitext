@@ -45,6 +45,22 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// WhatsApp IDs are phone numbers: 8801711111111 -> +880 1711-111111.
+function formatPhone(waId) {
+  const digits = String(waId).replace(/\D/g, '');
+  const bd = /^880(1\d{3})(\d{6})$/.exec(digits);
+  return bd ? `+880 ${bd[1]}-${bd[2]}` : `+${digits}`;
+}
+
+// How a customer is labelled in the list and chat header. Facebook and
+// Instagram IDs mean nothing to people, so they are never shown.
+function customerLabel(c) {
+  if (c.platform === 'whatsapp') {
+    return { title: formatPhone(c.contact_external_id), subtitle: c.contact_name || '' };
+  }
+  return { title: c.contact_name || `${PLATFORM_LABEL[c.platform]} customer`, subtitle: '' };
+}
+
 function timeLabel(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -115,7 +131,8 @@ function renderList() {
   },
   el('div', { class: 'row' },
     el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform]),
-    el('span', { class: 'name' }, c.contact_name || c.contact_external_id),
+    el('span', { class: 'name' }, customerLabel(c).title,
+      customerLabel(c).subtitle ? el('span', { class: 'muted name-extra' }, ` · ${customerLabel(c).subtitle}`) : null),
     c.unread_count ? el('span', { class: 'unread' }, String(c.unread_count)) : null,
     el('span', { class: 'muted small' }, timeLabel(c.last_message_at))),
   el('div', { class: 'preview' }, c.last_message_preview || ' '),
@@ -186,7 +203,8 @@ function windowNotice(c) {
 function renderChatHeader() {
   const c = state.conversations.get(state.activeId);
   if (!c) return;
-  $('#chat-title').textContent = c.contact_name || c.contact_external_id;
+  const label = customerLabel(c);
+  $('#chat-title').textContent = label.subtitle ? `${label.title} · ${label.subtitle}` : label.title;
   $('#chat-sub').textContent = `${PLATFORM_LABEL[c.platform]} · ${c.channel_name} · ${c.assigned_user_name ? `Handled by ${c.assigned_user_name}` : 'Unassigned'}`;
   $('#toggle-status').textContent = c.status === 'open' ? 'Mark done' : 'Reopen';
 

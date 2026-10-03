@@ -1,6 +1,6 @@
 import { transaction, nowIso } from './db.js';
 import { ensureAssigned, assignConversation, distributeUnassigned } from './assignment.js';
-import { messagingWindow, sendText, INVALID_TOKEN } from './platforms/meta.js';
+import { messagingWindow, sendText, fetchProfileName, INVALID_TOKEN } from './platforms/meta.js';
 import { decryptSecret } from './secrets.js';
 
 export class InboxError extends Error {
@@ -53,6 +53,40 @@ export function createInbox(db, config, { emit = () => {}, fetchImpl } = {}) {
     return conversation;
   }
 
+  // contactId -> time of the last failed lookup, so a broken token or a
+  // private profile is not asked about on every message.
+  const failedLookups = new Map();
+  const RETRY_MS = 60 * 60_000;
+
+  async function lookupName(contactId) {
+    const row = db.prepare(`
+      SELECT ct.id, ct.external_id, ct.name, ch.platform, ch.access_token
+      FROM contacts ct JOIN channels ch ON ch.id = ct.channel_id WHERE ct.id = ?
+    `).get(contactId);
+    if (!row || row.name || !['messenger', 'instagram'].includes(row.platform)) return null;
+    if (!row.access_token || config.dryRun) return null;
+    if (Date.now() - (failedLookups.get(contactId) ?? 0) < RETRY_MS) return null;
+    try {
+      const name = await fetchProfileName({
+        platform: row.platform,
+        userId: row.external_id,
+        accessToken: decryptSecret(row.access_token, config.tokenKey),
+        graphVersion: config.meta.graphVersion,
+        fetchImpl,
+      });
+      if (!name) throw new Error('profile has no name');
+      db.prepare('UPDATE contacts SET name = ? WHERE id = ? AND name IS NULL').run(name, contactId);
+      failedLookups.delete(contactId);
+      const conversation = db.prepare('SELECT id FROM conversations WHERE contact_id = ?').get(contactId);
+      if (conversation) publish(conversation.id);
+      return name;
+    } catch (err) {
+      failedLookups.set(contactId, Date.now());
+      console.warn(`could not read ${row.platform} profile name for contact ${contactId}: ${err.message}`);
+      return null;
+    }
+  }
+
   return {
     getConversation,
     canAccess,
@@ -97,11 +131,25 @@ export function createInbox(db, config, { emit = () => {}, fetchImpl } = {}) {
           db.prepare('UPDATE conversations SET last_message_at = ?, last_message_preview = ? WHERE id = ?')
             .run(evt.timestamp, preview(evt.text, evt.attachments), conversation.id);
         }
-        return { conversationId: conversation.id, messageId: Number(lastInsertRowid) };
+        return { conversationId: conversation.id, messageId: Number(lastInsertRowid), contactId: contact.id };
       });
 
       const conversation = publish(result.conversationId, result.messageId);
-      return { conversation, message: getMessage(result.messageId) };
+      // Look the name up in the background so the webhook is answered quickly.
+      const nameLookup = conversation.contact_name ? Promise.resolve(null) : lookupName(result.contactId);
+      return { conversation, message: getMessage(result.messageId), nameLookup };
+    },
+
+    lookupName,
+
+    // Fills in names for customers saved before names were looked up.
+    async fillMissingNames() {
+      const contacts = db.prepare(`
+        SELECT ct.id FROM contacts ct JOIN channels ch ON ch.id = ct.channel_id
+        WHERE ct.name IS NULL AND ch.platform IN ('messenger', 'instagram') AND ch.access_token != ''
+        ORDER BY ct.id DESC LIMIT 500
+      `).all();
+      for (const { id } of contacts) await lookupName(id);
     },
 
     applyStatus({ messageId, status, error }) {

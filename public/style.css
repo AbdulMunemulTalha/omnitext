@@ -67,6 +67,7 @@ input, select, textarea { font: inherit; color: var(--text); background: var(--p
 .badge.instagram { background: var(--instagram); }
 .badge.whatsapp { background: var(--whatsapp); }
 .tab-count { margin-left: 6px; }
+.name-extra { font-weight: 400; }
 .unread { background: var(--danger); color: #fff; border-radius: 99px; font-size: 11px; padding: 0 7px; font-weight: 600; }
 
 .chat { min-height: 0; display: flex; }
