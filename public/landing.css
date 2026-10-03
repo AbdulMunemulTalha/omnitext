@@ -81,7 +81,8 @@ main h2 { font-size: clamp(26px, 4vw, 34px); margin: 0 0 28px; text-align: cente
 .steps h3 { margin: 10px 0 4px; }
 .steps p { margin: 0; color: var(--muted); }
 
-.faq { max-width: 760px; margin: 0 auto; }
+/* Narrow the questions, not the section: sections already get wide side padding. */
+.faq > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .faq details { border-bottom: 1px solid var(--border); padding: 14px 0; }
 .faq summary { cursor: pointer; font-weight: 600; }
 .faq details p { margin: 8px 0 0; color: var(--muted); }
