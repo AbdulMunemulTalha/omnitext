@@ -37,6 +37,7 @@ export function createApp(db, config, { fetchImpl } = {}) {
   app.use(legalRoutes(config));
   app.use('/api', apiRoutes(db, config, inbox, orders));
   app.get('/app', (_req, res) => res.sendFile('app.html', { root: PUBLIC_DIR }));
+  app.get('/bn', (_req, res) => res.sendFile('bn.html', { root: PUBLIC_DIR }));
   app.use(express.static(PUBLIC_DIR));
 
   return { app, server, io, inbox, orders };

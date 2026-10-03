@@ -31,6 +31,12 @@ test('serves the landing page at / and the app at /app', async () => {
   const landing = await call('/');
   assert.equal(landing.status, 200);
   assert.match(landing.data, /Get started/);
+  assert.match(landing.data, /href="\/bn"/, 'English page links to the Bangla one');
+  const bangla = await call('/bn');
+  assert.equal(bangla.status, 200);
+  assert.match(bangla.data, /<html lang="bn">/);
+  assert.match(bangla.data, /শুরু করুন/);
+  assert.match(bangla.data, /href="\/app\?signup=1"/);
   const app = await call('/app');
   assert.equal(app.status, 200);
   assert.match(app.data, /id="onboarding"/);

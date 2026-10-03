@@ -40,6 +40,12 @@ code { background: var(--soft); padding: 0 4px; border-radius: 4px; }
 .logo { font-weight: 800; font-size: 20px; color: var(--text); text-decoration: none; }
 .nav nav { display: flex; gap: 18px; }
 .nav nav a { color: var(--muted); text-decoration: none; }
+.lang { color: var(--text); text-decoration: none; font-weight: 600; padding: 6px 10px; border: 1px solid var(--border); border-radius: 99px; font-size: 14px; white-space: nowrap; }
+
+/* Bangla page: a Bengali font, looser lines for the taller script, no tight tracking. */
+body.bn { font-family: "Noto Sans Bengali", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.75; }
+body.bn h1, body.bn h2, body.bn h3 { line-height: 1.35; letter-spacing: 0; }
+body.bn .hero h1 { font-size: clamp(30px, 4.6vw, 46px); }
 
 main > section { padding: 64px max(16px, calc((100vw - 1120px) / 2)); }
 main > section:nth-child(even) { background: var(--soft); }
