@@ -125,17 +125,41 @@ function renderList() {
   if (!items.length) list.replaceChildren(el('li', { class: 'muted' }, 'No conversations here'));
 }
 
+// Open conversations nobody has picked up yet, shown as a count on the tab.
+const waiting = new Set();
+
+function renderWaitingCount() {
+  const tab = $('#tabs button[data-filter=unassigned]');
+  tab.replaceChildren('Unassigned', ...(waiting.size ? [el('span', { class: 'unread tab-count' }, String(waiting.size))] : []));
+}
+
+function trackWaiting(c) {
+  if (c.status === 'open' && c.assigned_user_id === null) waiting.add(c.id);
+  else waiting.delete(c.id);
+  renderWaitingCount();
+}
+
 async function loadConversations() {
-  const rows = await api(`/conversations?filter=${state.filter}&status=${state.status}`);
+  const [rows, unassigned] = await Promise.all([
+    api(`/conversations?filter=${state.filter}&status=${state.status}`),
+    api('/conversations?filter=unassigned&status=open'),
+  ]);
   state.conversations = new Map(rows.map((c) => [c.id, c]));
+  waiting.clear();
+  unassigned.forEach((c) => waiting.add(c.id));
+  renderWaitingCount();
   renderList();
+}
+
+function selectTab(filter) {
+  state.filter = filter;
+  for (const b of $('#tabs').children) b.classList.toggle('active', b.dataset.filter === filter);
 }
 
 $('#tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-filter]');
   if (!btn) return;
-  state.filter = btn.dataset.filter;
-  for (const b of $('#tabs').children) b.classList.toggle('active', b === btn);
+  selectTab(btn.dataset.filter);
   loadConversations();
 });
 
@@ -781,6 +805,7 @@ function connectSocket() {
     } else {
       state.conversations.set(c.id, c);
     }
+    trackWaiting(c);
     renderList();
     if (c.id === state.activeId) renderChatHeader();
   });
@@ -820,6 +845,8 @@ async function start() {
   $('#open-settings').hidden = !isOwner;
   $('#simulator').hidden = !(isOwner && state.me.devTools);
   document.querySelectorAll('[data-owner-only]').forEach((n) => { n.hidden = !isOwner; });
+  // Owners oversee everything, and a shop without moderators has nothing under "Mine".
+  selectTab(isOwner ? 'all' : 'mine');
   await loadTeam();
   await loadConversations();
   await loadSavedReplies();
