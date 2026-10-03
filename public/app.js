@@ -112,6 +112,7 @@ function signOut() {
   state.token = null;
   localStorage.removeItem('omnitext_token');
   state.socket?.disconnect();
+  state.socket = null;
   showAuth();
 }
 
@@ -346,6 +347,18 @@ async function loadTeam() {
       : ''))));
 }
 
+// What happened to the conversations that existed before the channel was connected.
+function importLabel(c) {
+  const count = `${c.conversationCount} conversation${c.conversationCount === 1 ? '' : 's'}`;
+  switch (c.importStatus) {
+    case 'running': return el('span', { class: 'muted' }, `Bringing in past chats… ${count} so far`);
+    case 'done': return el('span', { class: 'ok-text' }, `Past chats brought in · ${count}`);
+    case 'failed': return el('span', { class: 'warn' }, `Couldn't bring in past chats: ${c.importError}`);
+    case 'declined': return el('span', { class: 'muted' }, 'Chat history was not shared (contacts only)');
+    default: return c.conversationCount ? el('span', { class: 'muted' }, count) : null;
+  }
+}
+
 async function loadChannels() {
   const channels = await api('/channels');
   $('#channel-table').replaceChildren(...channels.map((c) => el('tr', {},
@@ -354,7 +367,21 @@ async function loadChannels() {
     el('td', { class: 'muted' }, c.externalId),
     el('td', {}, c.needsReconnect
       ? el('span', { class: 'warn' }, 'Facebook access expired: connect again')
-      : c.connected ? 'Live' : 'Test mode (no token)'),
+      : c.connected ? 'Live' : 'Test mode (no token)', importLabel(c) ? el('div', { class: 'small' }, importLabel(c)) : null),
+    el('td', {}, ['messenger', 'instagram'].includes(c.platform) && c.connected && c.importStatus !== 'running'
+      ? el('button', {
+        class: 'ghost',
+        title: 'Copy in conversations from before this account was connected',
+        onclick: async () => {
+          try {
+            await api(`/channels/${c.id}/import`, { method: 'POST' });
+            loadChannels();
+          } catch (err) {
+            alert(err.message);
+          }
+        },
+      }, c.importStatus ? 'Import again' : 'Import past chats')
+      : ''),
     el('td', {}, el('button', {
       class: 'ghost',
       onclick: async () => {
@@ -376,7 +403,7 @@ function openSettings() {
   form.deliveryOutsideDhaka.value = state.me.workspace.deliveryOutsideDhaka;
   const { facebook, whatsapp } = state.me.connect;
   $('#connect-facebook').hidden = !facebook;
-  $('#connect-whatsapp').hidden = !whatsapp;
+  for (const b of document.querySelectorAll('#settings .js-connect-whatsapp')) b.hidden = !whatsapp;
   $('#connect-unavailable').hidden = facebook && whatsapp;
   if (!$('#settings').open) $('#settings').showModal();
 }
@@ -795,35 +822,48 @@ async function waitForSignupInfo() {
   return embeddedSignup;
 }
 
-async function finishWhatsApp(code) {
+// Meta reports how the popup ended. Business app numbers finish with their own event,
+// and newer flows may report only the WhatsApp account (the server then finds the number).
+const SIGNUP_FINISHED = ['FINISH', 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', 'FINISH_ONLY_WABA'];
+
+async function finishWhatsApp(code, mode) {
   const info = await waitForSignupInfo();
-  if (!info || info.event !== 'FINISH' || !info.phoneNumberId) {
-    showConnectResult({ problems: ['WhatsApp signup was not finished. Please choose or add a phone number and try again.'] });
+  if (!info || !SIGNUP_FINISHED.includes(info.event) || !info.wabaId) {
+    showConnectResult({ problems: ['WhatsApp signup was not finished. Please try again and complete every step.'] });
     return;
   }
+  const coexistence = mode === 'app' || info.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
   try {
-    showConnectResult(await api('/connect/whatsapp', {
-      method: 'POST', body: { code, phoneNumberId: info.phoneNumberId, wabaId: info.wabaId },
-    }));
+    const result = await api('/connect/whatsapp', {
+      method: 'POST', body: { code, wabaId: info.wabaId, phoneNumberId: info.phoneNumberId || null, coexistence },
+    });
+    if (result.importing) {
+      result.problems.push('Your WhatsApp chats are being copied in now. Keep the WhatsApp Business app open on your phone until it finishes.');
+    }
+    showConnectResult(result);
   } catch (err) {
     showConnectResult({ problems: [err.message] });
   }
 }
 
+// mode "app": the number the business already uses in the WhatsApp Business app
+// (keeps the app working and can bring its chats along). mode "new": a fresh number.
 async function connectWhatsApp(button) {
+  const mode = button.dataset.mode === 'new' ? 'new' : 'app';
   button.disabled = true;
   embeddedSignup = null;
   try {
     const FB = await loadFacebookSdk();
     FB.login((response) => {
       const code = response.authResponse?.code;
-      const done = code ? finishWhatsApp(code) : Promise.resolve(showConnectResult({ problems: ['WhatsApp signup was cancelled.'] }));
+      const done = code ? finishWhatsApp(code, mode) : Promise.resolve(showConnectResult({ problems: ['WhatsApp signup was cancelled.'] }));
       done.finally(() => { button.disabled = false; });
     }, {
       config_id: state.me.connect.whatsappConfigId,
       response_type: 'code',
       override_default_response_type: true,
-      extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+      // The login configuration decides the sign-up version (v4); extras only pick the Business app flow.
+      extras: mode === 'app' ? { featureType: 'whatsapp_business_app_onboarding' } : {},
     });
   } catch (err) {
     button.disabled = false;
@@ -860,6 +900,14 @@ function connectSocket() {
   });
   state.socket.on('channels', () => {
     if ($('#settings').open) loadChannels();
+    if (inOnboarding()) {
+      if (!$('[data-panel=channels]').hidden) renderOnboardingChannels();
+      if (!$('[data-panel=done]').hidden) renderOnboardingSummary();
+    }
+  });
+  // Past conversations arrived (Facebook/Instagram import or WhatsApp history sync).
+  state.socket.on('imported', () => {
+    if (!$('#app').hidden) loadConversations();
   });
   state.socket.on('order', (order) => {
     if (order.conversation_id === state.activeId) loadConversationOrders();
@@ -884,6 +932,8 @@ function showOnboarding(step) {
   $('#app').hidden = true;
   $('#onboarding').hidden = false;
   goToStep(ONB_STEPS.includes(step) ? step : 'business');
+  // Live import progress while the owner finishes setting up.
+  if (!state.socket) connectSocket();
 }
 
 function goToStep(step) {
@@ -947,7 +997,8 @@ $('#onb-business').addEventListener('submit', async (e) => {
 async function renderOnboardingChannels() {
   const channels = await api('/channels');
   $('#onb-channel-list').replaceChildren(...channels.map((c) => el('li', {},
-    el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform]), ` ${c.name}`)));
+    el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform]), ` ${c.name}`,
+    importLabel(c) ? el('div', { class: 'small' }, importLabel(c)) : null)));
   if (!channels.length) $('#onb-channel-list').append(el('li', { class: 'muted' }, 'Nothing connected yet.'));
   $('#onb-channels-next').hidden = channels.length === 0;
   $('#onb-channels-skip').hidden = channels.length > 0;
@@ -992,7 +1043,7 @@ async function renderOnboardingSummary() {
   const [channels, team] = await Promise.all([api('/channels'), api('/team')]);
   const moderators = team.filter((m) => m.role === 'moderator' && m.isActive);
   const item = (ok, text) => el('li', { class: ok ? 'ok' : 'todo' }, `${ok ? '✓' : '○'} ${text}`);
-  $('#onb-summary').replaceChildren(
+  $('#onb-summary').replaceChildren(...[
     item(true, `${state.me.workspace.name}: delivery ৳${state.me.workspace.deliveryInsideDhaka} inside Dhaka, ৳${state.me.workspace.deliveryOutsideDhaka} outside`),
     item(channels.length > 0, channels.length
       ? `Connected: ${channels.map((c) => `${PLATFORM_LABEL[c.platform]} (${c.name})`).join(', ')}`
@@ -1000,7 +1051,22 @@ async function renderOnboardingSummary() {
     item(moderators.length > 0, moderators.length
       ? `${moderators.length} moderator${moderators.length > 1 ? 's' : ''}: ${moderators.map((m) => m.name).join(', ')}`
       : 'No moderators: you will answer every customer yourself'),
-  );
+    pastChatsItem(channels, item),
+  ].filter(Boolean));
+}
+
+function pastChatsItem(channels, item) {
+  const importing = channels.filter((c) => c.importStatus === 'running');
+  const total = channels.reduce((sum, c) => sum + c.conversationCount, 0);
+  if (importing.length) {
+    return item(false, `Bringing in your past chats from ${importing.map((c) => c.name).join(', ')}… ${total} so far. `
+      + 'You can open your inbox now; they keep arriving in the background.');
+  }
+  if (total) {
+    return item(true, `${total} existing conversation${total === 1 ? '' : 's'} brought in. Chats still waiting for a reply are open; `
+      + 'older ones are under "Closed" in the inbox.');
+  }
+  return null;
 }
 
 // Back/Continue/Skip buttons carry the step they lead to.

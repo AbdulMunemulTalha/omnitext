@@ -77,8 +77,10 @@
           <div class="channel-card">
             <div><span class="badge whatsapp">WhatsApp</span></div>
             <h3>WhatsApp Business</h3>
-            <p class="muted small">Connect your WhatsApp Business number through Meta's secure sign-up.</p>
-            <button type="button" class="brand-whatsapp js-connect-whatsapp">Connect WhatsApp</button>
+            <p class="muted small">Already selling on the WhatsApp Business app? Connect that number: you can keep using the app
+              on your phone, and your existing chats and contacts can come along.</p>
+            <button type="button" class="brand-whatsapp js-connect-whatsapp" data-mode="app">Connect my WhatsApp Business app</button>
+            <button type="button" class="link js-connect-whatsapp" data-mode="new">Use a new number instead</button>
             <p class="muted small js-whatsapp-unavailable" hidden>WhatsApp sign-up isn't switched on yet. You can connect it later from Settings, or manually below.</p>
             <details class="manual-connect">
               <summary class="muted small">Have a Phone number ID and access token? Connect manually</summary>
@@ -209,7 +211,8 @@
     <table class="table" id="channel-table"></table>
     <div class="connect-buttons">
       <button type="button" id="connect-facebook" class="brand-facebook js-connect-facebook">Connect Facebook Page &amp; Instagram</button>
-      <button type="button" id="connect-whatsapp" class="brand-whatsapp js-connect-whatsapp">Connect WhatsApp</button>
+      <button type="button" id="connect-whatsapp" class="brand-whatsapp js-connect-whatsapp" data-mode="app">Connect WhatsApp Business app</button>
+      <button type="button" class="ghost js-connect-whatsapp" data-mode="new">WhatsApp with a new number</button>
     </div>
     <p class="muted small" id="connect-unavailable" hidden>
       One-click connection needs the server's Meta app settings (META_APP_ID, META_APP_SECRET and, for WhatsApp,

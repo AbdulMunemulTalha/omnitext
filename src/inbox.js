@@ -87,9 +87,79 @@ export function createInbox(db, config, { emit = () => {}, fetchImpl } = {}) {
     }
   }
 
+  // How recent an unanswered customer message must be for an imported chat to
+  // stay open; older history is filed under Closed so it doesn't flood the queue.
+  const IMPORT_OPEN_DAYS = 7;
+
+  // Stores past conversations (from Meta's Conversations API or WhatsApp
+  // history sync). Safe to repeat: messages are matched on their Meta ID.
+  function importHistory(channelId, threads, { now = Date.now() } = {}) {
+    const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId);
+    if (!channel) return { conversations: 0, messages: 0 };
+    let messageCount = 0;
+    const touched = new Set();
+    transaction(db, () => {
+      const insertMessage = db.prepare(`
+        INSERT INTO messages (conversation_id, direction, text, attachments, external_id, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
+      `);
+      for (const thread of threads) {
+        if (!thread.messages.length) continue;
+        db.prepare(`
+          INSERT INTO contacts (workspace_id, channel_id, external_id, name) VALUES (?, ?, ?, ?)
+          ON CONFLICT (channel_id, external_id) DO UPDATE SET name = COALESCE(contacts.name, excluded.name)
+        `).run(channel.workspace_id, channel.id, thread.contactExternalId, thread.contactName ?? null);
+        const contact = db.prepare('SELECT id FROM contacts WHERE channel_id = ? AND external_id = ?')
+          .get(channel.id, thread.contactExternalId);
+        const created = db.prepare(`
+          INSERT INTO conversations (workspace_id, channel_id, contact_id, status) VALUES (?, ?, ?, 'closed')
+          ON CONFLICT (contact_id) DO NOTHING
+        `).run(channel.workspace_id, channel.id, contact.id).changes > 0;
+        const conversation = db.prepare('SELECT * FROM conversations WHERE contact_id = ?').get(contact.id);
+
+        for (const m of thread.messages) {
+          const { changes } = insertMessage.run(conversation.id, m.direction, m.text ?? '', JSON.stringify(m.attachments ?? []),
+            m.messageId, m.direction === 'in' ? 'received' : 'sent', m.timestamp);
+          messageCount += changes;
+        }
+
+        // Recompute the summary from everything stored, so imports and live messages agree.
+        const last = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').get(conversation.id);
+        const lastInbound = db.prepare("SELECT MAX(created_at) AS at FROM messages WHERE conversation_id = ? AND direction = 'in'").get(conversation.id).at;
+        db.prepare('UPDATE conversations SET last_message_at = ?, last_message_preview = ?, last_inbound_at = ? WHERE id = ?')
+          .run(last.created_at, preview(last.text, JSON.parse(last.attachments)), lastInbound, conversation.id);
+        const waiting = last.direction === 'in' && now - Date.parse(last.created_at) < IMPORT_OPEN_DAYS * 86_400_000;
+        if (created && waiting) {
+          db.prepare("UPDATE conversations SET status = 'open', unread_count = 1 WHERE id = ?").run(conversation.id);
+          ensureAssigned(db, { ...conversation, status: 'open' });
+        }
+        touched.add(conversation.id);
+      }
+    });
+    if (touched.size) emit(channel.workspace_id, 'imported', { channelId, conversations: touched.size });
+    return { conversations: touched.size, messages: messageCount };
+  }
+
+  // Names saved in the business's phone contacts beat anything else we know.
+  function setContactName(channelId, contactExternalId, name) {
+    const { changes } = db.prepare('UPDATE contacts SET name = ? WHERE channel_id = ? AND external_id = ?')
+      .run(name, channelId, contactExternalId);
+    if (!changes) {
+      const channel = db.prepare('SELECT workspace_id FROM channels WHERE id = ?').get(channelId);
+      db.prepare('INSERT INTO contacts (workspace_id, channel_id, external_id, name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING')
+        .run(channel.workspace_id, channelId, contactExternalId, name);
+      return;
+    }
+    const conversation = db.prepare(`SELECT c.id FROM conversations c JOIN contacts ct ON ct.id = c.contact_id
+      WHERE ct.channel_id = ? AND ct.external_id = ?`).get(channelId, contactExternalId);
+    if (conversation) publish(conversation.id);
+  }
+
   return {
     getConversation,
     canAccess,
+    importHistory,
+    setContactName,
 
     // Stores one normalized webhook message. Safe to call twice for the same
     // message because Meta retries deliveries.

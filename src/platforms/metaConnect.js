@@ -87,6 +87,16 @@ export function createMetaClient({ appId, appSecret, graphVersion, fetchImpl = g
       await post(`${phoneNumberId}/register`, { messaging_product: 'whatsapp', pin }, token);
     },
 
+    async wabaPhoneNumbers(wabaId, token) {
+      const data = await get(`${wabaId}/phone_numbers`, { fields: 'id,display_phone_number,verified_name' }, token);
+      return data.data ?? [];
+    },
+
+    // Coexistence: asks Meta to send the Business app's contacts or chat history as webhooks.
+    async requestAppDataSync(phoneNumberId, token, syncType) {
+      await post(`${phoneNumberId}/smb_app_data`, { messaging_product: 'whatsapp', sync_type: syncType }, token);
+    },
+
     async phoneNumber(phoneNumberId, token) {
       return get(phoneNumberId, { fields: 'display_phone_number,verified_name' }, token);
     },

@@ -16,7 +16,14 @@ const publicUser = (u) => ({
 const publicChannel = (c) => ({
   id: c.id, platform: c.platform, externalId: c.external_id, name: c.name, connected: Boolean(c.access_token),
   needsReconnect: Boolean(c.needs_reconnect),
+  importStatus: c.import_status || null,
+  importError: c.import_error || null,
+  conversationCount: c.conversation_count ?? 0,
 });
+
+const CHANNELS_WITH_COUNTS = `
+  SELECT ch.*, (SELECT COUNT(*) FROM conversations c WHERE c.channel_id = ch.id) AS conversation_count
+  FROM channels ch`;
 
 const CATEGORIES = ['fashion', 'beauty', 'electronics', 'food', 'home', 'kids', 'other'];
 const ONBOARDING_STEPS = ['business', 'channels', 'team', 'done'];
@@ -39,7 +46,7 @@ function required(body, fields) {
 
 const id = (req) => Number(req.params.id);
 
-export function apiRoutes(db, config, inbox, orders) {
+export function apiRoutes(db, config, inbox, orders, importer) {
   const router = Router();
   const auth = requireAuth(db);
 
@@ -236,7 +243,7 @@ export function apiRoutes(db, config, inbox, orders) {
   });
 
   router.get('/channels', auth, (req, res) => {
-    res.json(db.prepare('SELECT * FROM channels WHERE workspace_id = ? ORDER BY id').all(req.user.workspace_id).map(publicChannel));
+    res.json(db.prepare(`${CHANNELS_WITH_COUNTS} WHERE ch.workspace_id = ? ORDER BY ch.id`).all(req.user.workspace_id).map(publicChannel));
   });
 
   router.post('/channels', auth, requireOwner, (req, res) => {
@@ -250,6 +257,15 @@ export function apiRoutes(db, config, inbox, orders) {
       VALUES (?, ?, ?, ?, ?)`).run(req.user.workspace_id, platform, externalId.trim(), name.trim(),
       encryptSecret(String(accessToken).trim(), config.tokenKey));
     res.status(201).json(publicChannel(db.prepare('SELECT * FROM channels WHERE id = ?').get(lastInsertRowid)));
+  });
+
+  // Re-reads past Facebook/Instagram conversations (WhatsApp history can only be synced once, at connection).
+  router.post('/channels/:id/import', auth, requireOwner, (req, res) => {
+    const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND workspace_id = ?').get(id(req), req.user.workspace_id);
+    if (!channel) throw new InboxError(404, 'Channel not found');
+    if (channel.platform === 'whatsapp') throw new InboxError(400, 'WhatsApp chat history can only be synced when the number is connected');
+    if (!importer?.start(channel.id)) throw new InboxError(409, 'An import is already running, or this channel has no access token');
+    res.status(202).json({ started: true });
   });
 
   router.delete('/channels/:id', auth, requireOwner, (req, res) => {

@@ -130,6 +130,7 @@ button:disabled { opacity: .6; cursor: progress; }
 .connect-page { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
 .connect-page label { display: flex; gap: 8px; align-items: center; }
 .warn { color: #b26a00; font-weight: 600; }
+.ok-text { color: var(--whatsapp); }
 
 @media (max-width: 760px) {
   .order-form { grid-template-columns: 1fr; }

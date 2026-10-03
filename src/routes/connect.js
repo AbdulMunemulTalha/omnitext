@@ -12,21 +12,21 @@ const PENDING_MINUTES = 30;
 const minutesFromNow = (m) => new Date(Date.now() + m * 60_000).toISOString();
 
 // Adds a channel, or refreshes its token if this workspace already has it.
-function upsertChannel(db, workspaceId, { platform, externalId, name, token, wabaId = null }) {
+function upsertChannel(db, workspaceId, { platform, externalId, name, token, wabaId = null, pageId = null }) {
   const existing = db.prepare('SELECT * FROM channels WHERE platform = ? AND external_id = ?').get(platform, externalId);
   if (existing && existing.workspace_id !== workspaceId) {
     throw new InboxError(409, `${name} is already connected to another OmniText account`);
   }
   if (existing) {
-    db.prepare('UPDATE channels SET name = ?, access_token = ?, waba_id = COALESCE(?, waba_id), needs_reconnect = 0 WHERE id = ?')
-      .run(name, token, wabaId, existing.id);
+    db.prepare(`UPDATE channels SET name = ?, access_token = ?, waba_id = COALESCE(?, waba_id), page_id = COALESCE(?, page_id),
+      needs_reconnect = 0 WHERE id = ?`).run(name, token, wabaId, pageId, existing.id);
     return existing.id;
   }
-  return Number(db.prepare(`INSERT INTO channels (workspace_id, platform, external_id, name, access_token, waba_id)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(workspaceId, platform, externalId, name, token, wabaId).lastInsertRowid);
+  return Number(db.prepare(`INSERT INTO channels (workspace_id, platform, external_id, name, access_token, waba_id, page_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(workspaceId, platform, externalId, name, token, wabaId, pageId).lastInsertRowid);
 }
 
-export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
+export function connectRoutes(db, config, { fetchImpl, emit = () => {}, importer = null } = {}) {
   const router = Router();
   const auth = requireAuth(db);
   const meta = createMetaClient({ ...config.meta, fetchImpl });
@@ -112,6 +112,7 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
 
     const connected = [];
     const problems = [];
+    const channelIds = [];
     for (const page of chosen) {
       try {
         await meta.subscribePage(page.id, page.accessToken);
@@ -123,12 +124,14 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
       try {
         transaction(db, () => {
           if (messenger.has(page.id)) {
-            upsertChannel(db, req.user.workspace_id, { platform: 'messenger', externalId: page.id, name: page.name, token });
+            channelIds.push(upsertChannel(db, req.user.workspace_id,
+              { platform: 'messenger', externalId: page.id, name: page.name, token, pageId: page.id }));
             connected.push(page.name);
           }
           if (page.instagram && instagram.has(page.instagram.id)) {
             const name = page.instagram.username ? `@${page.instagram.username}` : `${page.name} (Instagram)`;
-            upsertChannel(db, req.user.workspace_id, { platform: 'instagram', externalId: page.instagram.id, name, token });
+            channelIds.push(upsertChannel(db, req.user.workspace_id,
+              { platform: 'instagram', externalId: page.instagram.id, name, token, pageId: page.id }));
             connected.push(name);
           }
         });
@@ -138,36 +141,53 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
       }
     }
     db.prepare('DELETE FROM pending_connections WHERE id = ?').run(row.id);
+    // Bring in the conversations these accounts already have, in the background.
+    for (const channelId of channelIds) importer?.start(channelId);
     emit(req.user.workspace_id, 'channels', null);
-    res.json({ connected, problems });
+    res.json({ connected, problems, importing: channelIds.length > 0 });
   });
 
   // Called by the dashboard after Meta's WhatsApp Embedded Signup popup finishes.
+  // `coexistence` means the business connected the number it already uses in the
+  // WhatsApp Business app: it stays registered there, and its contacts and chat
+  // history can be synced (only once, within 24 hours of onboarding).
   router.post('/api/connect/whatsapp', auth, requireOwner, requireMetaApp, async (req, res) => {
-    const { code, phoneNumberId, wabaId } = req.body ?? {};
-    if (![code, phoneNumberId, wabaId].every((v) => typeof v === 'string' && v.trim())) {
+    const { code, wabaId, coexistence = false } = req.body ?? {};
+    let phoneNumberId = req.body?.phoneNumberId ?? null;
+    if (![code, wabaId].every((v) => typeof v === 'string' && v.trim())) {
       throw new InboxError(400, 'WhatsApp signup did not finish. Please try again.');
     }
-    if (!/^\d+$/.test(phoneNumberId) || !/^\d+$/.test(wabaId)) throw new InboxError(400, 'Unexpected WhatsApp account ID');
+    if (!/^\d+$/.test(wabaId) || (phoneNumberId !== null && !/^\d+$/.test(String(phoneNumberId)))) {
+      throw new InboxError(400, 'Unexpected WhatsApp account ID');
+    }
 
     let token;
     try {
       token = await meta.businessTokenFromCode(code);
       await meta.subscribeWaba(wabaId, token);
+      // Newer sign-up flows (and Business app numbers) only report the account, not the number.
+      if (!phoneNumberId) {
+        const numbers = await meta.wabaPhoneNumbers(wabaId, token);
+        if (!numbers.length) throw new InboxError(400, 'No phone number was added in WhatsApp signup. Please run it again and add your number.');
+        phoneNumberId = String(numbers[0].id);
+      }
     } catch (err) {
+      if (err instanceof InboxError) throw err;
       throw new InboxError(502, `WhatsApp error: ${err.message}`);
     }
 
     const problems = [];
-    // A number that already uses the Cloud API is registered with its own PIN,
-    // in which case this fails harmlessly.
-    const pin = String(randomInt(0, 1_000_000)).padStart(6, '0');
     let registeredPin = null;
-    try {
-      await meta.registerPhone(phoneNumberId, token, pin);
-      registeredPin = pin;
-    } catch (err) {
-      problems.push(`Could not register the number for messaging: ${err.message}`);
+    if (!coexistence) {
+      // A number that already uses the Cloud API is registered with its own PIN,
+      // in which case this fails harmlessly.
+      const pin = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      try {
+        await meta.registerPhone(phoneNumberId, token, pin);
+        registeredPin = pin;
+      } catch (err) {
+        problems.push(`Could not register the number for messaging: ${err.message}`);
+      }
     }
 
     let name = `WhatsApp ${phoneNumberId}`;
@@ -176,11 +196,28 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
       name = [info.verified_name, info.display_phone_number].filter(Boolean).join(' · ') || name;
     } catch { /* keep the fallback name */ }
 
-    upsertChannel(db, req.user.workspace_id, {
+    const channelId = upsertChannel(db, req.user.workspace_id, {
       platform: 'whatsapp', externalId: phoneNumberId, name, token: encryptSecret(token, config.tokenKey), wabaId,
     });
+
+    let importing = false;
+    if (coexistence) {
+      // Contacts first (they carry the names), then chat history. Both arrive as webhooks.
+      try {
+        await meta.requestAppDataSync(phoneNumberId, token, 'smb_app_state_sync');
+      } catch (err) {
+        problems.push(`Could not sync WhatsApp contacts: ${err.message}`);
+      }
+      try {
+        await meta.requestAppDataSync(phoneNumberId, token, 'history');
+        db.prepare("UPDATE channels SET import_status = 'running', import_count = 0, import_error = NULL WHERE id = ?").run(channelId);
+        importing = true;
+      } catch (err) {
+        problems.push(`Could not start chat history sync: ${err.message}`);
+      }
+    }
     emit(req.user.workspace_id, 'channels', null);
-    res.json({ connected: [name], problems, pin: registeredPin });
+    res.json({ connected: [name], problems, pin: registeredPin, importing });
   });
 
   router.use('/api/connect', (err, _req, res, _next) => {

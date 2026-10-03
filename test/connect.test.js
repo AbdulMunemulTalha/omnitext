@@ -77,6 +77,7 @@ test('connects a Facebook Page and its Instagram account after login', async () 
       paging: { next: 'https://graph.facebook.com/v23.0/me/accounts?after=abc' },
     }]));
   meta.on('POST', /\/111\/subscribed_apps/, () => [200, { success: true }]);
+  meta.on('GET', /\/111\/conversations/, () => [200, { data: [] }]);
 
   const ownerToken = await login('owner@shop.test');
   const modToken = await login('nadia@shop.test');
@@ -110,7 +111,7 @@ test('connects a Facebook Page and its Instagram account after login', async () 
   assert.ok(!ctx.db.prepare('SELECT payload FROM pending_connections').get().payload.includes('PAGE1'));
 
   const done = await call(`/api/connect/facebook/${pendingId}`, { method: 'POST', token: ownerToken, body: { messenger: ['111'], instagram: ['999'] } });
-  assert.deepEqual(done.data, { connected: ['Demo Fashion', '@demofashion'], problems: [] });
+  assert.deepEqual(done.data, { connected: ['Demo Fashion', '@demofashion'], problems: [], importing: true });
   const subscribe = meta.calls.find((c) => c.path.endsWith('/111/subscribed_apps'));
   assert.equal(subscribe.auth, 'Bearer PAGE1');
   assert.equal(subscribe.body.subscribed_fields, 'messages,message_echoes');
@@ -175,4 +176,34 @@ test('a channel whose token Meta rejects is flagged for reconnection', async () 
   const channels = await call('/api/channels', { token: ownerToken });
   assert.equal(channels.data.find((c) => c.externalId === '111').needsReconnect, true);
   assert.ok(!JSON.stringify(channels.data).includes('enc:v1'), 'tokens are not exposed');
+});
+
+test('connects a WhatsApp Business app number and starts syncing its chats', async () => {
+  meta.on('GET', /\/oauth\/access_token\?.*code=COEX/, () => [200, { access_token: 'COEXTOKEN' }]);
+  meta.on('POST', /\/66666\/subscribed_apps/, () => [200, { success: true }]);
+  meta.on('GET', /\/66666\/phone_numbers/, () => [200, { data: [{ id: '88888', display_phone_number: '+880 1700-000001' }] }]);
+  meta.on('GET', /\/88888\?/, () => [200, { verified_name: 'Rupa Fashion', display_phone_number: '+880 1700-000001' }]);
+  meta.on('POST', /\/88888\/smb_app_data/, () => [200, { messaging_product: 'whatsapp', request_id: 'r1' }]);
+
+  const ownerToken = await login('owner@shop.test');
+  const before = meta.calls.length;
+  // Business app sign-ups report only the WhatsApp account; the number is looked up.
+  const res = await call('/api/connect/whatsapp', { method: 'POST', token: ownerToken, body: { code: 'COEX', wabaId: '66666', coexistence: true } });
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  assert.deepEqual(res.data.connected, ['Rupa Fashion · +880 1700-000001']);
+  assert.equal(res.data.importing, true);
+  assert.equal(res.data.pin, null, 'the number stays registered to the Business app');
+
+  const calls = meta.calls.slice(before);
+  assert.ok(!calls.some((c) => c.path.endsWith('/register')), 'does not re-register a Business app number');
+  assert.deepEqual(calls.filter((c) => c.path.endsWith('/smb_app_data')).map((c) => c.body.sync_type), ['smb_app_state_sync', 'history']);
+  const channel = ctx.db.prepare("SELECT * FROM channels WHERE external_id = '88888'").get();
+  assert.equal(channel.import_status, 'running');
+  assert.equal(channel.waba_id, '66666');
+
+  const channels = await call('/api/channels', { token: ownerToken });
+  const wa = channels.data.find((c) => c.externalId === '88888');
+  assert.equal(wa.importStatus, 'running');
+  assert.equal((await call(`/api/channels/${wa.id}/import`, { method: 'POST', token: ownerToken })).status, 400,
+    'WhatsApp history can only be synced at connection');
 });

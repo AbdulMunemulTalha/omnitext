@@ -150,6 +150,12 @@ const ADDED_COLUMNS = [
   ['workspaces', 'phone', "TEXT NOT NULL DEFAULT ''"],
   ['workspaces', 'category', "TEXT NOT NULL DEFAULT ''"],
   ['workspaces', 'onboarding_step', "TEXT NOT NULL DEFAULT 'done'"],
+  // The Facebook Page an Instagram account is reached through (needed to read its history).
+  ['channels', 'page_id', 'TEXT'],
+  // Import of conversations that existed before the channel was connected.
+  ['channels', 'import_status', "TEXT NOT NULL DEFAULT ''"],
+  ['channels', 'import_count', 'INTEGER NOT NULL DEFAULT 0'],
+  ['channels', 'import_error', 'TEXT'],
 ];
 
 function addMissingColumns(db) {

@@ -52,54 +52,113 @@ function whatsappText(m) {
   }
 }
 
+const digits = (value) => String(value ?? '').replace(/\D/g, '');
+
+function whatsappMessage(m, { phoneNumberId, contactId, direction, name = null }) {
+  return {
+    platform: 'whatsapp',
+    channelExternalId: phoneNumberId,
+    contactExternalId: String(contactId),
+    contactName: name,
+    direction,
+    messageId: m.id,
+    text: whatsappText(m),
+    attachments: WHATSAPP_MEDIA.includes(m.type) ? [{ type: m.type, mediaId: m[m.type]?.id ?? null }]
+      : m.type === 'media_placeholder' ? [{ type: 'media', mediaId: null }] : [],
+    timestamp: toIso(m.timestamp),
+  };
+}
+
 function parseWhatsApp(entry) {
   const messages = [];
   const statuses = [];
+  const history = [];
+  const contacts = [];
   for (const change of entry.changes ?? []) {
-    if (change.field !== 'messages') continue;
     const value = change.value ?? {};
     const phoneNumberId = String(value.metadata?.phone_number_id ?? '');
-    const names = new Map((value.contacts ?? []).map((c) => [c.wa_id, c.profile?.name ?? null]));
-    for (const m of value.messages ?? []) {
-      messages.push({
-        platform: 'whatsapp',
-        channelExternalId: phoneNumberId,
-        contactExternalId: String(m.from),
-        contactName: names.get(m.from) ?? null,
-        direction: 'in',
-        messageId: m.id,
-        text: whatsappText(m),
-        attachments: WHATSAPP_MEDIA.includes(m.type) ? [{ type: m.type, mediaId: m[m.type]?.id ?? null }] : [],
-        timestamp: toIso(m.timestamp),
-      });
+    const business = digits(value.metadata?.display_phone_number);
+
+    if (change.field === 'messages') {
+      const names = new Map((value.contacts ?? []).map((c) => [c.wa_id, c.profile?.name ?? null]));
+      for (const m of value.messages ?? []) {
+        messages.push(whatsappMessage(m, { phoneNumberId, contactId: m.from, direction: 'in', name: names.get(m.from) ?? null }));
+      }
+      for (const s of value.statuses ?? []) {
+        statuses.push({
+          platform: 'whatsapp',
+          messageId: s.id,
+          status: s.status,
+          error: s.errors?.[0]?.title ?? s.errors?.[0]?.message ?? null,
+        });
+      }
     }
-    for (const s of value.statuses ?? []) {
-      statuses.push({
-        platform: 'whatsapp',
-        messageId: s.id,
-        status: s.status,
-        error: s.errors?.[0]?.title ?? s.errors?.[0]?.message ?? null,
-      });
+
+    // Replies the business sends from the WhatsApp Business app (coexistence).
+    if (change.field === 'smb_message_echoes') {
+      for (const m of value.message_echoes ?? []) {
+        messages.push(whatsappMessage(m, { phoneNumberId, contactId: m.to, direction: 'out' }));
+      }
+    }
+
+    // Past chats shared from the WhatsApp Business app (coexistence).
+    if (change.field === 'history') {
+      for (const chunk of value.history ?? []) {
+        if (chunk.errors?.length) {
+          history.push({ platform: 'whatsapp', channelExternalId: phoneNumberId, declined: true, error: chunk.errors[0].message ?? chunk.errors[0].title });
+          continue;
+        }
+        const threads = (chunk.threads ?? []).map((thread) => ({
+          contactExternalId: String(thread.id),
+          contactName: null,
+          messages: (thread.messages ?? []).map((m) => whatsappMessage(m, {
+            phoneNumberId,
+            contactId: thread.id,
+            direction: digits(m.from) === business ? 'out' : 'in',
+          })),
+        }));
+        history.push({ platform: 'whatsapp', channelExternalId: phoneNumberId, threads, progress: chunk.metadata?.progress ?? null });
+      }
+      // Media details for recent history arrive later in the same field, shaped like normal messages.
+      for (const m of value.messages ?? []) {
+        const contactId = digits(m.from) === business ? m.to : m.from;
+        if (contactId) {
+          history.push({
+            platform: 'whatsapp',
+            channelExternalId: phoneNumberId,
+            threads: [{ contactExternalId: String(contactId), contactName: null,
+              messages: [whatsappMessage(m, { phoneNumberId, contactId, direction: digits(m.from) === business ? 'out' : 'in' })] }],
+          });
+        }
+      }
+    }
+
+    // Contacts saved in the WhatsApp Business app (coexistence): gives customers their saved names.
+    if (change.field === 'smb_app_state_sync') {
+      for (const item of value.state_sync ?? []) {
+        const c = item.contact;
+        if (!c?.phone_number || item.action === 'remove') continue;
+        const name = c.full_name || c.first_name || null;
+        if (name) contacts.push({ platform: 'whatsapp', channelExternalId: phoneNumberId, contactExternalId: digits(c.phone_number), name });
+      }
     }
   }
-  return { messages, statuses };
+  return { messages, statuses, history, contacts };
 }
 
 // Turns any Messenger, Instagram or WhatsApp webhook payload into a flat list
 // of normalized messages and delivery statuses.
 export function parseWebhook(body, { appId = '' } = {}) {
-  const messages = [];
-  const statuses = [];
+  const result = { messages: [], statuses: [], history: [], contacts: [] };
   for (const entry of body?.entry ?? []) {
-    if (body.object === 'page') messages.push(...parseMessaging('messenger', entry, { appId }));
-    else if (body.object === 'instagram') messages.push(...parseMessaging('instagram', entry, { appId }));
+    if (body.object === 'page') result.messages.push(...parseMessaging('messenger', entry, { appId }));
+    else if (body.object === 'instagram') result.messages.push(...parseMessaging('instagram', entry, { appId }));
     else if (body.object === 'whatsapp_business_account') {
       const parsed = parseWhatsApp(entry);
-      messages.push(...parsed.messages);
-      statuses.push(...parsed.statuses);
+      for (const key of Object.keys(result)) result[key].push(...parsed[key]);
     }
   }
-  return { messages, statuses };
+  return result;
 }
 
 // Meta only allows free-form replies for 24h after the customer's last message.
