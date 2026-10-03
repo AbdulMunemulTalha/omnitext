@@ -1,0 +1,30 @@
+# OmniText on a VPS that already has a web server (Caddy) on ports 80/443.
+# Deployed with Hostinger's Docker Manager as its own project: its own data
+# volume, its own network, and no published ports. The existing web server
+# reaches it over the "omnitext_edge" network at http://omnitext-app:3000.
+#
+# The code is built straight from GitHub, so redeploying picks up new pushes.
+services:
+  app:
+    build:
+      context: https://github.com/AbdulMunemulTalha/omnitext.git#claude/bd-ecom-messaging-saas-73p1up
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_PATH: /app/data/omnitext.db
+    volumes:
+      - omnitext_data:/app/data
+    networks:
+      edge:
+        aliases:
+          - omnitext-app
+
+networks:
+  edge:
+    name: omnitext_edge
+
+volumes:
+  omnitext_data:
