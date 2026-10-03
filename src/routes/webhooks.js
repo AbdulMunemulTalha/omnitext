@@ -17,6 +17,7 @@ export function webhookRoutes(config, inbox) {
   router.post('/webhooks/meta', (req, res) => {
     if (config.meta.appSecret) {
       if (!verifySignature(req.rawBody, req.get('x-hub-signature-256'), config.meta.appSecret)) {
+        console.warn(`webhook rejected: bad or missing signature (object=${req.body?.object ?? '?'})`);
         return res.sendStatus(401);
       }
     } else if (config.isProduction) {
@@ -25,14 +26,20 @@ export function webhookRoutes(config, inbox) {
     }
 
     const { messages, statuses } = parseWebhook(req.body, { appId: config.meta.appId });
+    const outcome = { stored: 0, ignored: 0, failed: 0 };
     for (const message of messages) {
       try {
-        inbox.ingestMessage(message);
+        const result = inbox.ingestMessage(message);
+        outcome[result.ignored ? 'ignored' : 'stored'] += 1;
       } catch (err) {
+        outcome.failed += 1;
         console.error('Failed to store webhook message', message.messageId, err);
       }
     }
     for (const status of statuses) inbox.applyStatus(status);
+    // One line per delivery, without message contents.
+    console.log(`webhook ${req.body?.object ?? '?'}: ${messages.length} messages (${outcome.stored} stored, `
+      + `${outcome.ignored} ignored, ${outcome.failed} failed), ${statuses.length} statuses`);
     // Always acknowledge quickly, otherwise Meta retries and eventually disables the webhook.
     res.sendStatus(200);
   });
