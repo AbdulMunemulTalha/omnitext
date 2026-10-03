@@ -74,15 +74,24 @@ let signupMode = false;
 
 function showAuth() {
   $('#app').hidden = true;
+  $('#onboarding').hidden = true;
   $('#auth').hidden = false;
 }
 
-$('#auth-toggle').addEventListener('click', () => {
-  signupMode = !signupMode;
-  $('#signup-fields').hidden = !signupMode;
-  $('#auth-submit').textContent = signupMode ? 'Create account' : 'Sign in';
-  $('#auth-toggle').textContent = signupMode ? 'Already have an account? Sign in' : 'New business? Create an account';
-});
+function setSignupMode(on) {
+  signupMode = on;
+  $('#signup-fields').hidden = !on;
+  for (const input of $('#signup-fields').querySelectorAll('input')) input.required = on;
+  $('#auth-submit').textContent = on ? 'Create account' : 'Sign in';
+  $('#auth-toggle').textContent = on ? 'Already have an account? Sign in' : 'New business? Create an account';
+}
+
+$('#auth-toggle').addEventListener('click', () => setSignupMode(!signupMode));
+// The landing page's "Start free" links to /app?signup=1.
+if (new URLSearchParams(window.location.search).has('signup')) {
+  setSignupMode(true);
+  history.replaceState(null, '', window.location.pathname);
+}
 
 $('#auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -674,20 +683,31 @@ function showConnectResult({ connected = [], problems = [], pin = null }) {
   if (connected.length) parts.push(`Connected: ${connected.join(', ')}.`);
   if (pin) parts.push(`WhatsApp two-step verification PIN: ${pin}. Write it down; Meta asks for it if the number is moved.`);
   parts.push(...problems);
-  $('#connect-result').textContent = parts.join(' ');
-  $('#connect-result').hidden = parts.length === 0;
-  loadChannels();
+  for (const node of document.querySelectorAll('.js-connect-result')) {
+    node.textContent = parts.join(' ');
+    node.hidden = parts.length === 0;
+  }
+  if (inOnboarding()) renderOnboardingChannels();
+  else loadChannels();
 }
 
-$('#connect-facebook').addEventListener('click', async (e) => {
-  e.target.disabled = true;
+// Settings and onboarding share these buttons (by class).
+async function connectFacebook(button) {
+  button.disabled = true;
   try {
     const { url } = await api('/connect/facebook/start');
     window.location.assign(url);
   } catch (err) {
-    e.target.disabled = false;
+    button.disabled = false;
     alert(err.message);
   }
+}
+
+document.addEventListener('click', (e) => {
+  const facebook = e.target.closest('.js-connect-facebook');
+  if (facebook) connectFacebook(facebook);
+  const whatsapp = e.target.closest('.js-connect-whatsapp');
+  if (whatsapp) connectWhatsApp(whatsapp);
 });
 
 // Facebook sends the owner back to /?connect=<id> (or ?connect_error=...) after login.
@@ -698,7 +718,8 @@ async function resumeFacebookConnect() {
   if (!id && !error) return;
   history.replaceState(null, '', window.location.pathname);
   if (state.me.user.role !== 'owner') return;
-  openSettings();
+  // During onboarding the picker opens over the wizard instead of Settings.
+  if (!inOnboarding()) openSettings();
   if (error) {
     showConnectResult({ problems: [error] });
     return;
@@ -789,8 +810,7 @@ async function finishWhatsApp(code) {
   }
 }
 
-$('#connect-whatsapp').addEventListener('click', async (e) => {
-  const button = e.target;
+async function connectWhatsApp(button) {
   button.disabled = true;
   embeddedSignup = null;
   try {
@@ -809,7 +829,7 @@ $('#connect-whatsapp').addEventListener('click', async (e) => {
     button.disabled = false;
     alert(err.message);
   }
-});
+}
 
 // ---- Realtime -----------------------------------------------------------
 
@@ -850,12 +870,175 @@ function connectSocket() {
   });
 }
 
+// ---- Onboarding -----------------------------------------------------------
+
+const ONB_STEPS = ['business', 'channels', 'team', 'done'];
+const newPasswords = new Map(); // moderator id -> password shown once during onboarding
+
+function inOnboarding() {
+  return !$('#onboarding').hidden;
+}
+
+function showOnboarding(step) {
+  $('#auth').hidden = true;
+  $('#app').hidden = true;
+  $('#onboarding').hidden = false;
+  goToStep(ONB_STEPS.includes(step) ? step : 'business');
+}
+
+function goToStep(step) {
+  const index = ONB_STEPS.indexOf(step);
+  for (const li of $('#onb-steps').children) {
+    const i = ONB_STEPS.indexOf(li.dataset.step);
+    li.classList.toggle('current', i === index);
+    li.classList.toggle('complete', i < index);
+  }
+  for (const panel of document.querySelectorAll('#onboarding [data-panel]')) panel.hidden = panel.dataset.panel !== step;
+  if (step === 'business') fillBusinessForm();
+  if (step === 'channels') {
+    const { facebook, whatsapp } = state.me.connect;
+    for (const b of document.querySelectorAll('#onboarding .js-connect-facebook')) b.hidden = !facebook;
+    for (const b of document.querySelectorAll('#onboarding .js-connect-whatsapp')) b.hidden = !whatsapp;
+    $('#onboarding .js-facebook-unavailable').hidden = facebook;
+    $('#onboarding .js-whatsapp-unavailable').hidden = whatsapp;
+    renderOnboardingChannels();
+  }
+  if (step === 'team') renderOnboardingTeam();
+  if (step === 'done') renderOnboardingSummary();
+  window.scrollTo(0, 0);
+}
+
+// Saves the step (and any fields) so a refresh or the Facebook redirect resumes here.
+async function saveStep(step, fields = {}) {
+  state.me.workspace = await api('/workspace', { method: 'PATCH', body: { ...fields, onboardingStep: step } });
+  goToStep(step);
+}
+
+function fillBusinessForm() {
+  const form = $('#onb-business');
+  const ws = state.me.workspace;
+  form.name.value = ws.name;
+  form.phone.value = ws.phone;
+  form.category.value = ws.category;
+  form.deliveryInsideDhaka.value = ws.deliveryInsideDhaka;
+  form.deliveryOutsideDhaka.value = ws.deliveryOutsideDhaka;
+}
+
+$('#onb-business').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const error = form.querySelector('.error');
+  error.hidden = true;
+  try {
+    await saveStep('channels', {
+      name: form.name.value,
+      phone: form.phone.value,
+      category: form.category.value,
+      deliveryInsideDhaka: Number(form.deliveryInsideDhaka.value),
+      deliveryOutsideDhaka: Number(form.deliveryOutsideDhaka.value),
+    });
+    $('#workspace-name').textContent = state.me.workspace.name;
+  } catch (err) {
+    error.textContent = err.message;
+    error.hidden = false;
+  }
+});
+
+async function renderOnboardingChannels() {
+  const channels = await api('/channels');
+  $('#onb-channel-list').replaceChildren(...channels.map((c) => el('li', {},
+    el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform]), ` ${c.name}`)));
+  if (!channels.length) $('#onb-channel-list').append(el('li', { class: 'muted' }, 'Nothing connected yet.'));
+  $('#onb-channels-next').hidden = channels.length === 0;
+  $('#onb-channels-skip').hidden = channels.length > 0;
+}
+
+$('#onb-wa-manual').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { ...Object.fromEntries(new FormData(e.target)), platform: 'whatsapp' };
+  try {
+    const channel = await api('/channels', { method: 'POST', body });
+    e.target.reset();
+    showConnectResult({ connected: [channel.name] });
+  } catch (err) {
+    showConnectResult({ problems: [err.message] });
+  }
+});
+
+async function renderOnboardingTeam() {
+  const team = (await api('/team')).filter((m) => m.role === 'moderator' && m.isActive);
+  $('#onb-team-list').replaceChildren(...team.map((m) => el('li', {},
+    el('strong', {}, m.name), ` · ${m.email}`,
+    newPasswords.has(m.id) ? el('span', { class: 'muted' }, ` · password: ${newPasswords.get(m.id)}`) : null)));
+  if (!team.length) $('#onb-team-list').append(el('li', { class: 'muted' }, 'No moderators yet.'));
+  $('#onb-team-next').textContent = team.length ? 'Continue' : 'Skip for now';
+}
+
+$('#onb-team-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#onb-team-error').hidden = true;
+  try {
+    const { user, password } = await api('/team', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) });
+    newPasswords.set(user.id, password);
+    e.target.reset();
+    renderOnboardingTeam();
+  } catch (err) {
+    $('#onb-team-error').textContent = err.message;
+    $('#onb-team-error').hidden = false;
+  }
+});
+
+async function renderOnboardingSummary() {
+  const [channels, team] = await Promise.all([api('/channels'), api('/team')]);
+  const moderators = team.filter((m) => m.role === 'moderator' && m.isActive);
+  const item = (ok, text) => el('li', { class: ok ? 'ok' : 'todo' }, `${ok ? '✓' : '○'} ${text}`);
+  $('#onb-summary').replaceChildren(
+    item(true, `${state.me.workspace.name}: delivery ৳${state.me.workspace.deliveryInsideDhaka} inside Dhaka, ৳${state.me.workspace.deliveryOutsideDhaka} outside`),
+    item(channels.length > 0, channels.length
+      ? `Connected: ${channels.map((c) => `${PLATFORM_LABEL[c.platform]} (${c.name})`).join(', ')}`
+      : 'No channels connected yet: connect them in Settings → Connected channels'),
+    item(moderators.length > 0, moderators.length
+      ? `${moderators.length} moderator${moderators.length > 1 ? 's' : ''}: ${moderators.map((m) => m.name).join(', ')}`
+      : 'No moderators: you will answer every customer yourself'),
+  );
+}
+
+// Back/Continue/Skip buttons carry the step they lead to.
+$('#onboarding').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-goto]');
+  if (button) saveStep(button.dataset.goto).catch((err) => alert(err.message));
+});
+
+$('#onb-finish').addEventListener('click', async () => {
+  try {
+    state.me.workspace = await api('/workspace', { method: 'PATCH', body: { onboardingStep: 'done' } });
+    await enterApp();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+$('#onb-logout').addEventListener('click', async () => {
+  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  signOut();
+});
+
 // ---- Boot ---------------------------------------------------------------
 
 async function start() {
   state.me = await api('/me');
+  if (state.me.user.role === 'owner' && state.me.workspace.onboardingStep !== 'done') {
+    showOnboarding(state.me.workspace.onboardingStep);
+    resumeFacebookConnect();
+    return;
+  }
+  await enterApp();
+}
+
+async function enterApp() {
   const isOwner = state.me.user.role === 'owner';
   $('#auth').hidden = true;
+  $('#onboarding').hidden = true;
   $('#app').hidden = false;
   $('#workspace-name').textContent = state.me.workspace.name;
   $('#me-name').textContent = `${state.me.user.name} (${state.me.user.role})`;

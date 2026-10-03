@@ -3,214 +3,119 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OmniText Inbox</title>
-  <link rel="stylesheet" href="/style.css">
+  <title>OmniText · One inbox for Facebook, Instagram and WhatsApp orders</title>
+  <meta name="description" content="Answer Messenger, Instagram and WhatsApp customers from one inbox. Every customer stays with one moderator, and orders are taken right in the chat.">
+  <link rel="stylesheet" href="/landing.css">
 </head>
 <body>
-  <section id="auth" class="auth" hidden>
-    <form id="auth-form" class="card">
-      <h1>OmniText</h1>
-      <p class="muted">Messenger, Instagram and WhatsApp orders in one inbox.</p>
-      <div id="signup-fields" hidden>
-        <label>Business name<input name="businessName" autocomplete="organization"></label>
-        <label>Your name<input name="name" autocomplete="name"></label>
+  <header class="nav">
+    <a class="logo" href="/">OmniText</a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <span class="spacer"></span>
+    <a class="btn ghost" href="/app">Log in</a>
+    <a class="btn" href="/app?signup=1">Get started</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">For Facebook, Instagram &amp; WhatsApp sellers</p>
+        <h1>Every customer message. One inbox. One moderator per customer.</h1>
+        <p class="lead">Stop juggling Messenger, Instagram and WhatsApp on different phones. OmniText brings every order message
+          into one place, gives each new customer to one moderator, and keeps them together, so no customer is answered twice
+          or forgotten.</p>
+        <div class="cta">
+          <a class="btn big" href="/app?signup=1">Create your shop's inbox</a>
+          <a class="btn big ghost" href="#how">See how it works</a>
+        </div>
+        <p class="small muted">Set up in about 5 minutes. No app to install.</p>
       </div>
-      <label>Email<input name="email" type="email" autocomplete="email" required></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
-      <p id="auth-error" class="error" hidden></p>
-      <button type="submit" id="auth-submit">Sign in</button>
-      <button type="button" id="auth-toggle" class="link">New business? Create an account</button>
-      <p class="muted small legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/data-deletion">Data deletion</a></p>
-    </form>
-  </section>
 
-  <section id="app" class="app" hidden>
-    <header class="topbar">
-      <strong id="workspace-name"></strong>
-      <span class="spacer"></span>
-      <label class="duty"><input type="checkbox" id="duty-toggle"> On duty</label>
-      <button id="open-orders" class="ghost">Orders</button>
-      <button id="open-settings" class="ghost" hidden>Settings</button>
-      <span id="me-name" class="muted"></span>
-      <button id="logout" class="ghost">Sign out</button>
-    </header>
-
-    <aside class="sidebar">
-      <nav class="tabs" id="tabs">
-        <button data-filter="mine" class="active">Mine</button>
-        <button data-filter="unassigned">Unassigned</button>
-        <button data-filter="all" data-owner-only hidden>All</button>
-      </nav>
-      <div class="status-switch">
-        <select id="status-filter">
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
-      </div>
-      <ul id="conversation-list" class="conversation-list"></ul>
-    </aside>
-
-    <main class="chat" id="chat">
-      <div class="empty" id="chat-empty">Select a conversation</div>
-      <div class="chat-inner" id="chat-inner" hidden>
-        <header class="chat-header">
-          <div>
-            <div class="chat-title" id="chat-title"></div>
-            <div class="muted small" id="chat-sub"></div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-bar"><span></span><span></span><span></span></div>
+        <div class="mock-body">
+          <ul class="mock-list">
+            <li class="active"><i class="b fb">Messenger</i><b>Rahim Uddin</b><em>Ei dress ta koto taka?</em><small>Nadia</small></li>
+            <li><i class="b ig">Instagram</i><b>@tania.shop</b><em>Size L ache?</em><small>Karim</small></li>
+            <li><i class="b wa">WhatsApp</i><b>+880 1712-345678</b><em>Order dite chai</em><small>Nadia</small></li>
+            <li><i class="b fb">Messenger</i><b>Sumaiya Akter</b><em>Delivery charge koto?</em><small>Karim</small></li>
+          </ul>
+          <div class="mock-chat">
+            <p class="in">Ei dress ta koto taka?</p>
+            <p class="out">Assalamu alaikum! Dam 1,200 taka. Size M ar L available.</p>
+            <p class="in">M size ta nibo. Mirpur 10 e delivery hobe?</p>
+            <p class="out order">Order #128 confirmed ✅<br>Cash on delivery: ৳1,270</p>
           </div>
-          <span class="spacer"></span>
-          <button id="new-order">New order</button>
-          <select id="assign-select" hidden></select>
-          <button id="toggle-status" class="ghost"></button>
-        </header>
-        <div class="order-strip" id="order-strip" hidden></div>
-        <div class="messages" id="messages"></div>
-        <p class="notice" id="chat-notice" hidden></p>
-        <ul class="saved-picker" id="saved-picker" hidden></ul>
-        <form class="composer" id="composer">
-          <textarea id="composer-text" rows="2" placeholder="Type a reply… (/ for saved replies, Enter to send, Shift+Enter for new line)"></textarea>
-          <button type="submit">Send</button>
-        </form>
+        </div>
       </div>
-    </main>
-  </section>
+    </section>
 
-  <dialog id="settings">
-    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
-    <h2>Team</h2>
-    <table class="table" id="team-table"></table>
-    <form id="add-member" class="inline-form">
-      <input name="name" placeholder="Moderator name" required>
-      <input name="email" type="email" placeholder="Email" required>
-      <input name="password" placeholder="Password (optional)">
-      <button>Add moderator</button>
-    </form>
-    <p id="member-result" class="muted small"></p>
-
-    <h2>Connected channels</h2>
-    <table class="table" id="channel-table"></table>
-    <div class="connect-buttons">
-      <button type="button" id="connect-facebook" class="brand-facebook">Connect Facebook Page &amp; Instagram</button>
-      <button type="button" id="connect-whatsapp" class="brand-whatsapp">Connect WhatsApp</button>
-    </div>
-    <p class="muted small" id="connect-unavailable" hidden>
-      One-click connection needs the server's Meta app settings (META_APP_ID, META_APP_SECRET and, for WhatsApp,
-      META_WHATSAPP_CONFIG_ID). You can still connect manually below.
-    </p>
-    <p class="notice" id="connect-result" hidden></p>
-    <details class="manual-connect">
-      <summary class="muted small">Connect manually with an ID and access token (advanced)</summary>
-    <form id="add-channel" class="inline-form">
-      <select name="platform">
-        <option value="messenger">Facebook Page</option>
-        <option value="instagram">Instagram</option>
-        <option value="whatsapp">WhatsApp</option>
-      </select>
-      <input name="name" placeholder="Display name" required>
-      <input name="externalId" placeholder="Page ID / IG account ID / WA phone number ID" required>
-      <input name="accessToken" placeholder="Access token (blank = test mode)">
-      <button>Connect</button>
-    </form>
-    </details>
-
-    <h2>Delivery charges</h2>
-    <form id="delivery-form" class="inline-form">
-      <label class="field">Inside Dhaka (৳)<input name="deliveryInsideDhaka" type="number" min="0" step="1" required></label>
-      <label class="field">Outside Dhaka (৳)<input name="deliveryOutsideDhaka" type="number" min="0" step="1" required></label>
-      <button>Save</button>
-    </form>
-
-    <h2>Saved replies</h2>
-    <p class="muted small">Moderators type / and the shortcut in the reply box, e.g. <code>/price</code>.</p>
-    <table class="table" id="saved-table"></table>
-    <form id="add-saved" class="inline-form">
-      <input name="shortcut" placeholder="Shortcut, e.g. bkash" required style="max-width: 180px">
-      <textarea name="text" rows="2" placeholder="Reply text" required></textarea>
-      <button>Save reply</button>
-    </form>
-
-    <div id="simulator" hidden>
-      <h2>Test a customer message</h2>
-      <p class="muted small">Development only. Pretends a customer messaged one of your channels.</p>
-      <form id="simulate" class="inline-form">
-        <select name="channelId" id="simulate-channel"></select>
-        <input name="customerId" placeholder="Customer ID" value="cust-1" required>
-        <input name="customerName" placeholder="Customer name" value="Rahim">
-        <input name="text" placeholder="Message" value="Ei dress ta koto taka?" required>
-        <button>Send as customer</button>
-      </form>
-    </div>
-  </dialog>
-
-  <dialog id="connect-dialog">
-    <form method="dialog" class="dialog-close"><button class="ghost">Cancel</button></form>
-    <h2>Choose what to connect</h2>
-    <p class="muted small">Messages from what you tick will arrive in this inbox. Instagram accounts appear here when they are linked to the Facebook Page.</p>
-    <form id="connect-form">
-      <div id="connect-pages" class="connect-pages"></div>
-      <p class="error" id="connect-error" hidden></p>
-      <button type="submit">Connect selected</button>
-    </form>
-  </dialog>
-
-  <dialog id="order-dialog">
-    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
-    <h2>New order</h2>
-    <form id="order-form" class="order-form">
-      <label class="field">Customer name<input name="customerName" required></label>
-      <label class="field">Phone<input name="phone" inputmode="tel" placeholder="01XXXXXXXXX" required></label>
-      <label class="field wide">Address<textarea name="address" rows="2" required></textarea></label>
-      <label class="field">Area
-        <select name="area">
-          <option value="inside_dhaka">Inside Dhaka</option>
-          <option value="outside_dhaka">Outside Dhaka</option>
-        </select>
-      </label>
-      <label class="field">Payment
-        <select name="paymentMethod">
-          <option value="cod">Cash on delivery</option>
-          <option value="bkash">bKash</option>
-          <option value="nagad">Nagad</option>
-          <option value="rocket">Rocket</option>
-          <option value="bank">Bank</option>
-        </select>
-      </label>
-      <div class="wide">
-        <div class="items-head muted small"><span>Product</span><span>Qty</span><span>Price (৳)</span><span></span></div>
-        <div id="order-items"></div>
-        <button type="button" class="link" id="add-item">+ Add product</button>
+    <section class="problem">
+      <h2>Sound familiar?</h2>
+      <div class="grid3">
+        <div><strong>Three apps, three phones</strong><p>Orders come on Messenger, Instagram and WhatsApp, and someone has to check all of them all day.</p></div>
+        <div><strong>Two moderators, one customer</strong><p>A customer replies 30 minutes later and a different moderator answers, without knowing what was promised.</p></div>
+        <div><strong>Orders lost in chat</strong><p>Names, phone numbers and addresses are buried in old messages when it's time to send the parcel.</p></div>
       </div>
-      <label class="field">Delivery charge (৳)<input name="deliveryCharge" type="number" min="0" step="1"></label>
-      <label class="field">Discount (৳)<input name="discount" type="number" min="0" step="1" value="0"></label>
-      <label class="field">Advance paid (৳)<input name="advancePaid" type="number" min="0" step="1" value="0"></label>
-      <label class="field">Note<input name="note" placeholder="e.g. call before delivery"></label>
-      <div class="wide totals" id="order-totals"></div>
-      <label class="wide check"><input type="checkbox" name="sendSummary" checked> Send the order summary to the customer</label>
-      <p class="wide error" id="order-error" hidden></p>
-      <div class="wide"><button type="submit">Confirm order</button></div>
-    </form>
-  </dialog>
+    </section>
 
-  <dialog id="orders-dialog" class="wide-dialog">
-    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
-    <h2>Orders</h2>
-    <div class="inline-form">
-      <select id="orders-status">
-        <option value="">All statuses</option>
-        <option value="confirmed">Confirmed</option>
-        <option value="shipped">Shipped</option>
-        <option value="delivered">Delivered</option>
-        <option value="cancelled">Cancelled</option>
-        <option value="returned">Returned</option>
-      </select>
-      <input id="orders-search" type="search" placeholder="Search name, phone or #order">
-      <button id="orders-export" class="ghost">Export CSV</button>
-    </div>
-    <p class="muted small" id="orders-summary"></p>
-    <div class="table-scroll"><table class="table" id="orders-table"></table></div>
-  </dialog>
+    <section id="features" class="features">
+      <h2>Everything your team needs to sell from chat</h2>
+      <div class="grid3">
+        <div class="feature"><span class="icon">💬</span><h3>One inbox for every app</h3>
+          <p>Messenger, Instagram and WhatsApp messages land in one list. Replies go back on the app the customer used.</p></div>
+        <div class="feature"><span class="icon">🧑‍💼</span><h3>One moderator per customer</h3>
+          <p>New customers are shared out between on-duty moderators. When they write again, they go to the same moderator, every time.</p></div>
+        <div class="feature"><span class="icon">🧾</span><h3>Orders in the chat</h3>
+          <p>Take an order without leaving the conversation: delivery charge and cash-on-delivery worked out, summary sent to the customer.</p></div>
+        <div class="feature"><span class="icon">⚡</span><h3>Saved replies</h3>
+          <p>Price, delivery charge and bKash steps in one keystroke: type <code>/</code> and pick a reply, in Bangla or English.</p></div>
+        <div class="feature"><span class="icon">📦</span><h3>Ready for the courier</h3>
+          <p>Track every order from confirmed to delivered, and export the day's orders as a spreadsheet for bulk upload.</p></div>
+        <div class="feature"><span class="icon">👀</span><h3>Owner sees everything</h3>
+          <p>See every conversation, step in when needed, and move a customer to another moderator in one click.</p></div>
+      </div>
+    </section>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js" type="module"></script>
+    <section id="how" class="how">
+      <h2>Up and running in three steps</h2>
+      <ol class="steps">
+        <li><span>1</span><h3>Create your shop</h3><p>Tell us your business name and delivery charges.</p></li>
+        <li><span>2</span><h3>Connect your pages</h3><p>Log in with Facebook to connect your Page and Instagram, and connect your WhatsApp Business number.</p></li>
+        <li><span>3</span><h3>Add your moderators</h3><p>Give each moderator a login. They switch On duty and customers start coming in.</p></li>
+      </ol>
+      <a class="btn big" href="/app?signup=1">Get started</a>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>Questions</h2>
+      <details><summary>Do my customers need to install anything?</summary>
+        <p>No. Customers keep messaging your Page, Instagram or WhatsApp as they do today. Your replies from OmniText arrive in the same chat.</p></details>
+      <details><summary>Can I still use the Facebook Page app on my phone?</summary>
+        <p>Yes. Replies you send from Meta Business Suite also show up in OmniText, so the conversation history stays complete.</p></details>
+      <details><summary>What happens if a moderator is off duty?</summary>
+        <p>Their customers stay with them, and you can move any customer to someone else. New customers go only to moderators who are on duty; if nobody is, they wait in "Unassigned" until someone starts.</p></details>
+      <details><summary>Is my data safe?</summary>
+        <p>Connections are encrypted, Facebook and WhatsApp access is stored encrypted, and moderators only see their own customers. Read the <a href="/privacy">privacy policy</a>.</p></details>
+    </section>
+
+    <section class="final">
+      <h2>Give every customer a fast, personal answer</h2>
+      <a class="btn big" href="/app?signup=1">Create your shop's inbox</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>© OmniText</span>
+    <span class="spacer"></span>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="/data-deletion">Data deletion</a>
+    <a href="/app">Log in</a>
+  </footer>
 </body>
 </html>

@@ -64,7 +64,7 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
   // Facebook sends the browser here after login. The owner is not identified by
   // a token on this request, only by the one-time state created above.
   router.get('/auth/facebook/callback', async (req, res) => {
-    const fail = (message) => res.redirect(`/?connect_error=${encodeURIComponent(message)}`);
+    const fail = (message) => res.redirect(`/app?connect_error=${encodeURIComponent(message)}`);
     const state = db.prepare('SELECT * FROM oauth_states WHERE state = ? AND expires_at > ?').get(String(req.query.state ?? ''), nowIso());
     if (!state) return fail('This Facebook login link has expired. Please try again.');
     db.prepare('DELETE FROM oauth_states WHERE state = ?').run(state.state);
@@ -88,7 +88,7 @@ export function connectRoutes(db, config, { fetchImpl, emit = () => {} } = {}) {
     const id = randomBytes(18).toString('base64url');
     db.prepare('INSERT INTO pending_connections (id, workspace_id, payload, expires_at) VALUES (?, ?, ?, ?)')
       .run(id, state.workspace_id, encryptSecret(JSON.stringify(pages), config.tokenKey), minutesFromNow(PENDING_MINUTES));
-    res.redirect(`/?connect=${id}`);
+    res.redirect(`/app?connect=${id}`);
   });
 
   router.get('/api/connect/facebook/:id', auth, requireOwner, (req, res) => {

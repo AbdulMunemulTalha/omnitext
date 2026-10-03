@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { transaction } from '../db.js';
 import { hashPassword, verifyPassword, createSession, deleteSession, bearerToken, requireAuth, requireOwner } from '../auth.js';
 import { InboxError } from '../inbox.js';
-import { ordersCsv } from '../orders.js';
+import { ordersCsv, normalizeBdPhone } from '../orders.js';
 import { encryptSecret } from '../secrets.js';
 
 const PLATFORMS = ['messenger', 'instagram', 'whatsapp'];
@@ -18,8 +18,17 @@ const publicChannel = (c) => ({
   needsReconnect: Boolean(c.needs_reconnect),
 });
 
+const CATEGORIES = ['fashion', 'beauty', 'electronics', 'food', 'home', 'kids', 'other'];
+const ONBOARDING_STEPS = ['business', 'channels', 'team', 'done'];
+
 const publicWorkspace = (w) => ({
-  id: w.id, name: w.name, deliveryInsideDhaka: w.delivery_inside_dhaka, deliveryOutsideDhaka: w.delivery_outside_dhaka,
+  id: w.id,
+  name: w.name,
+  phone: w.phone,
+  category: w.category,
+  onboardingStep: w.onboarding_step,
+  deliveryInsideDhaka: w.delivery_inside_dhaka,
+  deliveryOutsideDhaka: w.delivery_outside_dhaka,
 });
 
 function required(body, fields) {
@@ -40,7 +49,7 @@ export function apiRoutes(db, config, inbox, orders) {
     if (password.length < 8) throw new InboxError(400, 'Password must be at least 8 characters');
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new InboxError(409, 'Email already registered');
     const userId = transaction(db, () => {
-      const ws = db.prepare('INSERT INTO workspaces (name) VALUES (?)').run(businessName.trim());
+      const ws = db.prepare("INSERT INTO workspaces (name, onboarding_step) VALUES (?, 'business')").run(businessName.trim());
       return Number(db.prepare(`INSERT INTO users (workspace_id, name, email, password_hash, role, is_online)
         VALUES (?, ?, ?, ?, 'owner', 1)`).run(ws.lastInsertRowid, name.trim(), email.trim(), hashPassword(password)).lastInsertRowid);
     });
@@ -110,11 +119,34 @@ export function apiRoutes(db, config, inbox, orders) {
   });
 
   router.patch('/workspace', auth, requireOwner, (req, res) => {
-    const fields = { deliveryInsideDhaka: 'delivery_inside_dhaka', deliveryOutsideDhaka: 'delivery_outside_dhaka' };
-    for (const [key, column] of Object.entries(fields)) {
-      if (req.body?.[key] === undefined) continue;
-      const value = Number(req.body[key]);
+    const body = req.body ?? {};
+    const updates = {};
+    for (const [key, column] of [['deliveryInsideDhaka', 'delivery_inside_dhaka'], ['deliveryOutsideDhaka', 'delivery_outside_dhaka']]) {
+      if (body[key] === undefined) continue;
+      const value = Number(body[key]);
       if (!Number.isInteger(value) || value < 0) throw new InboxError(400, 'Delivery charge must be a whole number of taka');
+      updates[column] = value;
+    }
+    if (body.name !== undefined) {
+      const name = String(body.name).trim();
+      if (!name || name.length > 100) throw new InboxError(400, 'Business name is required');
+      updates.name = name;
+    }
+    if (body.phone !== undefined) {
+      const phone = String(body.phone).trim() ? normalizeBdPhone(body.phone) : '';
+      if (phone === null) throw new InboxError(400, 'Phone must be a Bangladeshi mobile number like 01711111111');
+      updates.phone = phone;
+    }
+    if (body.category !== undefined) {
+      if (!CATEGORIES.includes(body.category)) throw new InboxError(400, 'Choose what you sell');
+      updates.category = body.category;
+    }
+    if (body.onboardingStep !== undefined) {
+      if (!ONBOARDING_STEPS.includes(body.onboardingStep)) throw new InboxError(400, 'Unknown onboarding step');
+      updates.onboarding_step = body.onboardingStep;
+    }
+    // Column names come from the fixed lists above, never from the request.
+    for (const [column, value] of Object.entries(updates)) {
       db.prepare(`UPDATE workspaces SET ${column} = ? WHERE id = ?`).run(value, req.user.workspace_id);
     }
     res.json(publicWorkspace(db.prepare('SELECT * FROM workspaces WHERE id = ?').get(req.user.workspace_id)));

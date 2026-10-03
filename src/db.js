@@ -146,6 +146,10 @@ const ADDED_COLUMNS = [
   // Set when Meta rejects the stored token, so the owner knows to reconnect.
   ['channels', 'needs_reconnect', 'INTEGER NOT NULL DEFAULT 0'],
   ['channels', 'waba_id', 'TEXT'],
+  // Onboarding. Shops that existed before onboarding are treated as set up.
+  ['workspaces', 'phone', "TEXT NOT NULL DEFAULT ''"],
+  ['workspaces', 'category', "TEXT NOT NULL DEFAULT ''"],
+  ['workspaces', 'onboarding_step', "TEXT NOT NULL DEFAULT 'done'"],
 ];
 
 function addMissingColumns(db) {

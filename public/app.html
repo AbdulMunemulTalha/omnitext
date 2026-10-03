@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OmniText</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="auth" class="auth" hidden>
+    <form id="auth-form" class="card">
+      <h1><a href="/" class="brand-link">OmniText</a></h1>
+      <p class="muted">Messenger, Instagram and WhatsApp orders in one inbox.</p>
+      <div id="signup-fields" hidden>
+        <label>Business name<input name="businessName" autocomplete="organization"></label>
+        <label>Your name<input name="name" autocomplete="name"></label>
+      </div>
+      <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+      <p id="auth-error" class="error" hidden></p>
+      <button type="submit" id="auth-submit">Sign in</button>
+      <button type="button" id="auth-toggle" class="link">New business? Create an account</button>
+      <p class="muted small legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/data-deletion">Data deletion</a></p>
+    </form>
+  </section>
+
+  <section id="onboarding" class="onboarding" hidden>
+    <header class="onb-header">
+      <strong>OmniText</strong>
+      <span class="spacer"></span>
+      <button type="button" class="ghost" id="onb-logout">Sign out</button>
+    </header>
+    <div class="onb-wrap">
+      <ol class="onb-steps" id="onb-steps">
+        <li data-step="business"><span>1</span> Your business</li>
+        <li data-step="channels"><span>2</span> Connect channels</li>
+        <li data-step="team"><span>3</span> Your team</li>
+        <li data-step="done"><span>4</span> Ready</li>
+      </ol>
+
+      <form class="onb-card" data-panel="business" id="onb-business">
+        <h1>Tell us about your business</h1>
+        <p class="muted">We use this to set up your inbox and order form. You can change it later in Settings.</p>
+        <label class="field">Business name<input name="name" required maxlength="100" autocomplete="organization"></label>
+        <label class="field">Business phone (optional)<input name="phone" inputmode="tel" placeholder="01XXXXXXXXX"></label>
+        <label class="field">What do you sell?
+          <select name="category" required>
+            <option value="">Choose one</option>
+            <option value="fashion">Fashion &amp; clothing</option>
+            <option value="beauty">Cosmetics &amp; beauty</option>
+            <option value="electronics">Electronics &amp; gadgets</option>
+            <option value="food">Food &amp; grocery</option>
+            <option value="home">Home &amp; lifestyle</option>
+            <option value="kids">Kids &amp; toys</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+        <div class="onb-two">
+          <label class="field">Delivery inside Dhaka (৳)<input name="deliveryInsideDhaka" type="number" min="0" step="1" required></label>
+          <label class="field">Delivery outside Dhaka (৳)<input name="deliveryOutsideDhaka" type="number" min="0" step="1" required></label>
+        </div>
+        <p class="error" hidden></p>
+        <div class="onb-actions"><span class="spacer"></span><button type="submit">Continue</button></div>
+      </form>
+
+      <section class="onb-card" data-panel="channels">
+        <h1>Connect where your customers message you</h1>
+        <p class="muted">Messages from every account you connect arrive in one inbox, and your replies go back on the same app.</p>
+        <div class="channel-cards">
+          <div class="channel-card">
+            <div><span class="badge messenger">Messenger</span> <span class="badge instagram">Instagram</span></div>
+            <h3>Facebook Page &amp; Instagram</h3>
+            <p class="muted small">Log in with the Facebook account that manages your Page. Instagram business accounts linked to the Page can be connected at the same time.</p>
+            <button type="button" class="brand-facebook js-connect-facebook">Connect with Facebook</button>
+            <p class="muted small js-facebook-unavailable" hidden>Facebook connection isn't set up on this server yet.</p>
+          </div>
+          <div class="channel-card">
+            <div><span class="badge whatsapp">WhatsApp</span></div>
+            <h3>WhatsApp Business</h3>
+            <p class="muted small">Connect your WhatsApp Business number through Meta's secure sign-up.</p>
+            <button type="button" class="brand-whatsapp js-connect-whatsapp">Connect WhatsApp</button>
+            <p class="muted small js-whatsapp-unavailable" hidden>WhatsApp sign-up isn't switched on yet. You can connect it later from Settings, or manually below.</p>
+            <details class="manual-connect">
+              <summary class="muted small">Have a Phone number ID and access token? Connect manually</summary>
+              <form id="onb-wa-manual" class="inline-form">
+                <input name="name" placeholder="Name, e.g. Shop WhatsApp" required>
+                <input name="externalId" placeholder="Phone number ID" required inputmode="numeric">
+                <input name="accessToken" placeholder="Access token" required>
+                <button>Connect</button>
+              </form>
+            </details>
+          </div>
+        </div>
+        <p class="notice js-connect-result" hidden></p>
+        <h3 class="onb-subhead">Connected</h3>
+        <ul class="onb-list" id="onb-channel-list"></ul>
+        <div class="onb-actions">
+          <button type="button" class="ghost" data-goto="business">Back</button>
+          <span class="spacer"></span>
+          <button type="button" class="link" data-goto="team" id="onb-channels-skip">Skip for now</button>
+          <button type="button" data-goto="team" id="onb-channels-next">Continue</button>
+        </div>
+      </section>
+
+      <section class="onb-card" data-panel="team">
+        <h1>Add your moderators</h1>
+        <p class="muted">Each new customer goes to one on-duty moderator, and comes back to the same moderator every time.
+          Running the shop alone? Skip this, you can reply to everyone yourself.</p>
+        <form id="onb-team-form" class="inline-form">
+          <input name="name" placeholder="Moderator name" required>
+          <input name="email" type="email" placeholder="Email they will log in with" required>
+          <input name="password" placeholder="Password (optional)">
+          <button>Add</button>
+        </form>
+        <p class="error" id="onb-team-error" hidden></p>
+        <ul class="onb-list" id="onb-team-list"></ul>
+        <div class="onb-actions">
+          <button type="button" class="ghost" data-goto="channels">Back</button>
+          <span class="spacer"></span>
+          <button type="button" data-goto="done" id="onb-team-next">Continue</button>
+        </div>
+      </section>
+
+      <section class="onb-card" data-panel="done">
+        <h1>You're ready 🎉</h1>
+        <p class="muted">Here's your setup. You can change any of it later in Settings.</p>
+        <ul class="onb-checklist" id="onb-summary"></ul>
+        <div class="onb-tips">
+          <strong>Tips for your first day</strong>
+          <ul>
+            <li>Switch <strong>On duty</strong> at the top when you start answering; customers wait in <strong>Unassigned</strong> when nobody is on duty.</li>
+            <li>Add <strong>saved replies</strong> for price, delivery charge and bKash steps in Settings, then type <code>/</code> in the reply box.</li>
+            <li>Click <strong>New order</strong> in a chat to take an order and send the customer a summary.</li>
+          </ul>
+        </div>
+        <div class="onb-actions">
+          <button type="button" class="ghost" data-goto="team">Back</button>
+          <span class="spacer"></span>
+          <button type="button" id="onb-finish">Open my inbox</button>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section id="app" class="app" hidden>
+    <header class="topbar">
+      <strong id="workspace-name"></strong>
+      <span class="spacer"></span>
+      <label class="duty"><input type="checkbox" id="duty-toggle"> On duty</label>
+      <button id="open-orders" class="ghost">Orders</button>
+      <button id="open-settings" class="ghost" hidden>Settings</button>
+      <span id="me-name" class="muted"></span>
+      <button id="logout" class="ghost">Sign out</button>
+    </header>
+
+    <aside class="sidebar">
+      <nav class="tabs" id="tabs">
+        <button data-filter="mine" class="active">Mine</button>
+        <button data-filter="unassigned">Unassigned</button>
+        <button data-filter="all" data-owner-only hidden>All</button>
+      </nav>
+      <div class="status-switch">
+        <select id="status-filter">
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <ul id="conversation-list" class="conversation-list"></ul>
+    </aside>
+
+    <main class="chat" id="chat">
+      <div class="empty" id="chat-empty">Select a conversation</div>
+      <div class="chat-inner" id="chat-inner" hidden>
+        <header class="chat-header">
+          <div>
+            <div class="chat-title" id="chat-title"></div>
+            <div class="muted small" id="chat-sub"></div>
+          </div>
+          <span class="spacer"></span>
+          <button id="new-order">New order</button>
+          <select id="assign-select" hidden></select>
+          <button id="toggle-status" class="ghost"></button>
+        </header>
+        <div class="order-strip" id="order-strip" hidden></div>
+        <div class="messages" id="messages"></div>
+        <p class="notice" id="chat-notice" hidden></p>
+        <ul class="saved-picker" id="saved-picker" hidden></ul>
+        <form class="composer" id="composer">
+          <textarea id="composer-text" rows="2" placeholder="Type a reply… (/ for saved replies, Enter to send, Shift+Enter for new line)"></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </main>
+  </section>
+
+  <dialog id="settings">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>Team</h2>
+    <table class="table" id="team-table"></table>
+    <form id="add-member" class="inline-form">
+      <input name="name" placeholder="Moderator name" required>
+      <input name="email" type="email" placeholder="Email" required>
+      <input name="password" placeholder="Password (optional)">
+      <button>Add moderator</button>
+    </form>
+    <p id="member-result" class="muted small"></p>
+
+    <h2>Connected channels</h2>
+    <table class="table" id="channel-table"></table>
+    <div class="connect-buttons">
+      <button type="button" id="connect-facebook" class="brand-facebook js-connect-facebook">Connect Facebook Page &amp; Instagram</button>
+      <button type="button" id="connect-whatsapp" class="brand-whatsapp js-connect-whatsapp">Connect WhatsApp</button>
+    </div>
+    <p class="muted small" id="connect-unavailable" hidden>
+      One-click connection needs the server's Meta app settings (META_APP_ID, META_APP_SECRET and, for WhatsApp,
+      META_WHATSAPP_CONFIG_ID). You can still connect manually below.
+    </p>
+    <p class="notice js-connect-result" id="connect-result" hidden></p>
+    <details class="manual-connect">
+      <summary class="muted small">Connect manually with an ID and access token (advanced)</summary>
+    <form id="add-channel" class="inline-form">
+      <select name="platform">
+        <option value="messenger">Facebook Page</option>
+        <option value="instagram">Instagram</option>
+        <option value="whatsapp">WhatsApp</option>
+      </select>
+      <input name="name" placeholder="Display name" required>
+      <input name="externalId" placeholder="Page ID / IG account ID / WA phone number ID" required>
+      <input name="accessToken" placeholder="Access token (blank = test mode)">
+      <button>Connect</button>
+    </form>
+    </details>
+
+    <h2>Delivery charges</h2>
+    <form id="delivery-form" class="inline-form">
+      <label class="field">Inside Dhaka (৳)<input name="deliveryInsideDhaka" type="number" min="0" step="1" required></label>
+      <label class="field">Outside Dhaka (৳)<input name="deliveryOutsideDhaka" type="number" min="0" step="1" required></label>
+      <button>Save</button>
+    </form>
+
+    <h2>Saved replies</h2>
+    <p class="muted small">Moderators type / and the shortcut in the reply box, e.g. <code>/price</code>.</p>
+    <table class="table" id="saved-table"></table>
+    <form id="add-saved" class="inline-form">
+      <input name="shortcut" placeholder="Shortcut, e.g. bkash" required style="max-width: 180px">
+      <textarea name="text" rows="2" placeholder="Reply text" required></textarea>
+      <button>Save reply</button>
+    </form>
+
+    <div id="simulator" hidden>
+      <h2>Test a customer message</h2>
+      <p class="muted small">Development only. Pretends a customer messaged one of your channels.</p>
+      <form id="simulate" class="inline-form">
+        <select name="channelId" id="simulate-channel"></select>
+        <input name="customerId" placeholder="Customer ID" value="cust-1" required>
+        <input name="customerName" placeholder="Customer name" value="Rahim">
+        <input name="text" placeholder="Message" value="Ei dress ta koto taka?" required>
+        <button>Send as customer</button>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="connect-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Cancel</button></form>
+    <h2>Choose what to connect</h2>
+    <p class="muted small">Messages from what you tick will arrive in this inbox. Instagram accounts appear here when they are linked to the Facebook Page.</p>
+    <form id="connect-form">
+      <div id="connect-pages" class="connect-pages"></div>
+      <p class="error" id="connect-error" hidden></p>
+      <button type="submit">Connect selected</button>
+    </form>
+  </dialog>
+
+  <dialog id="order-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>New order</h2>
+    <form id="order-form" class="order-form">
+      <label class="field">Customer name<input name="customerName" required></label>
+      <label class="field">Phone<input name="phone" inputmode="tel" placeholder="01XXXXXXXXX" required></label>
+      <label class="field wide">Address<textarea name="address" rows="2" required></textarea></label>
+      <label class="field">Area
+        <select name="area">
+          <option value="inside_dhaka">Inside Dhaka</option>
+          <option value="outside_dhaka">Outside Dhaka</option>
+        </select>
+      </label>
+      <label class="field">Payment
+        <select name="paymentMethod">
+          <option value="cod">Cash on delivery</option>
+          <option value="bkash">bKash</option>
+          <option value="nagad">Nagad</option>
+          <option value="rocket">Rocket</option>
+          <option value="bank">Bank</option>
+        </select>
+      </label>
+      <div class="wide">
+        <div class="items-head muted small"><span>Product</span><span>Qty</span><span>Price (৳)</span><span></span></div>
+        <div id="order-items"></div>
+        <button type="button" class="link" id="add-item">+ Add product</button>
+      </div>
+      <label class="field">Delivery charge (৳)<input name="deliveryCharge" type="number" min="0" step="1"></label>
+      <label class="field">Discount (৳)<input name="discount" type="number" min="0" step="1" value="0"></label>
+      <label class="field">Advance paid (৳)<input name="advancePaid" type="number" min="0" step="1" value="0"></label>
+      <label class="field">Note<input name="note" placeholder="e.g. call before delivery"></label>
+      <div class="wide totals" id="order-totals"></div>
+      <label class="wide check"><input type="checkbox" name="sendSummary" checked> Send the order summary to the customer</label>
+      <p class="wide error" id="order-error" hidden></p>
+      <div class="wide"><button type="submit">Confirm order</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="orders-dialog" class="wide-dialog">
+    <form method="dialog" class="dialog-close"><button class="ghost">Close</button></form>
+    <h2>Orders</h2>
+    <div class="inline-form">
+      <select id="orders-status">
+        <option value="">All statuses</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="shipped">Shipped</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="returned">Returned</option>
+      </select>
+      <input id="orders-search" type="search" placeholder="Search name, phone or #order">
+      <button id="orders-export" class="ghost">Export CSV</button>
+    </div>
+    <p class="muted small" id="orders-summary"></p>
+    <div class="table-scroll"><table class="table" id="orders-table"></table></div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

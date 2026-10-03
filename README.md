@@ -8,6 +8,7 @@ One inbox for Facebook Page, Instagram and WhatsApp orders, built for social-com
 - **Orders from the chat.** **New order** opens a form filled in from what's already known about the customer. It adds the delivery charge for inside or outside Dhaka, works out the cash-on-delivery amount, and can send the customer an order summary on the app they wrote from.
 - **Orders page.** A list of all orders, with search, status tracking (confirmed, shipped, delivered, cancelled, returned) and CSV export for courier bulk upload.
 - **Saved replies.** Answers to common questions like price, delivery charge and bKash steps. A moderator types `/` and a shortcut (e.g. `/bkash`) in the reply box.
+- **Landing page and guided setup.** `/` is the public landing page and the inbox lives at `/app`. A new shop is walked through four steps: business details and delivery charges, connecting Facebook Page & Instagram and WhatsApp, adding moderators, then the inbox. The wizard resumes where the owner left off, including after the Facebook login redirect.
 
 ## How assignment works
 
@@ -227,7 +228,7 @@ src/
   platforms/metaConnect.js  Facebook login, Page listing, WhatsApp Embedded Signup
   secrets.js           access token encryption
   routes/              REST API and the webhook endpoint
-public/                dashboard (plain HTML/JS, no build step)
+public/                landing page (index.html), app and onboarding (app.html), plain HTML/JS, no build step
 test/                  node:test suites
 ```
 

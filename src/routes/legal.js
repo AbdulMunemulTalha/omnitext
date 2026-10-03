@@ -28,7 +28,7 @@ function page(title, body, { operator, supportEmail }) {
 <main>
 <h1>${escapeHtml(title)}</h1>
 ${body}
-<nav><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a><a href="/data-deletion">Data deletion</a><a href="/">Sign in</a></nav>
+<nav><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a><a href="/data-deletion">Data deletion</a><a href="/">Home</a><a href="/app">Log in</a></nav>
 </main>
 </body>
 </html>`;
