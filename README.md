@@ -122,7 +122,7 @@ Then open `https://heyquicky.com`, create your business account, and continue wi
 
 ### Meta app settings for this domain
 
-Values to enter for the Quicky app (`1113995110986950`):
+Values to enter for the Quicky app (`1472241481412452`):
 
 | Where in the Meta dashboard | Value |
 | --- | --- |
