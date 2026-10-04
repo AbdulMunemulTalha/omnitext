@@ -2,7 +2,7 @@ const $ = (sel) => document.querySelector(sel);
 const PLATFORM_LABEL = { messenger: 'Messenger', instagram: 'Instagram', whatsapp: 'WhatsApp' };
 
 const state = {
-  token: localStorage.getItem('omnitext_token'),
+  token: localStorage.getItem('quicky_token'),
   me: null,
   team: [],
   filter: 'mine',
@@ -100,7 +100,7 @@ $('#auth-form').addEventListener('submit', async (e) => {
   try {
     const { token } = await api(signupMode ? '/auth/signup' : '/auth/login', { method: 'POST', body });
     state.token = token;
-    localStorage.setItem('omnitext_token', token);
+    localStorage.setItem('quicky_token', token);
     await start();
   } catch (err) {
     $('#auth-error').textContent = err.message;
@@ -110,7 +110,7 @@ $('#auth-form').addEventListener('submit', async (e) => {
 
 function signOut() {
   state.token = null;
-  localStorage.removeItem('omnitext_token');
+  localStorage.removeItem('quicky_token');
   state.socket?.disconnect();
   state.socket = null;
   showAuth();

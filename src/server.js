@@ -16,5 +16,5 @@ if (config.isProduction && !config.tokenKey) {
 
 server.listen(config.port, () => {
   inbox.fillMissingNames().catch((err) => console.warn('name backfill failed:', err.message));
-  console.log(`OmniText running on http://localhost:${config.port}${config.dryRun ? ' (dry run: replies are not sent to Meta)' : ''}`);
+  console.log(`Quicky running on http://localhost:${config.port}${config.dryRun ? ' (dry run: replies are not sent to Meta)' : ''}`);
 });

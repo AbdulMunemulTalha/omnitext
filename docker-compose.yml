@@ -1,12 +1,12 @@
-# Runs OmniText behind Caddy, which gets and renews the HTTPS certificate
+# Runs Quicky behind Caddy, which gets and renews the HTTPS certificate
 # automatically. Point the domain's DNS A record at this server first.
 services:
-  omnitext:
+  quicky:
     build: .
     restart: unless-stopped
     env_file: .env
     volumes:
-      - omnitext-data:/app/data
+      - quicky-data:/app/data
 
   caddy:
     image: caddy:2-alpine
@@ -14,12 +14,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    command: caddy reverse-proxy --from ${DOMAIN:-omnitext.creatorsstory.com} --to omnitext:3000
+    command: caddy reverse-proxy --from ${DOMAIN:-heyquicky.com} --to quicky:3000
     volumes:
       - caddy-data:/data
     depends_on:
-      - omnitext
+      - quicky
 
 volumes:
-  omnitext-data:
+  quicky-data:
   caddy-data:

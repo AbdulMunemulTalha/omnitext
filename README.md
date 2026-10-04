@@ -1,4 +1,4 @@
-# OmniText
+# Quicky
 
 One inbox for Facebook Page, Instagram and WhatsApp orders, built for social-commerce sellers in Bangladesh.
 
@@ -51,7 +51,7 @@ npm test
 
 ## Deploying
 
-OmniText needs a public **https** address: Meta won't send webhooks or finish a Facebook login otherwise. The examples use `omnitext.creatorsstory.com`; replace it with your domain.
+Quicky needs a public **https** address: Meta won't send webhooks or finish a Facebook login otherwise. The examples use `heyquicky.com`; replace it with your domain.
 
 First, create the `.env` file from `.env.example`:
 
@@ -72,21 +72,21 @@ cp .env.example .env && nano .env      # fill in the secrets
 docker compose up -d --build
 ```
 
-Caddy gets the HTTPS certificate for you. The database is stored in the `omnitext-data` volume. To update later, run `git pull && docker compose up -d --build`.
+Caddy gets the HTTPS certificate for you. The database is stored in the `quicky-data` volume. To update later, run `git pull && docker compose up -d --build`.
 
 ### Option A2: Hostinger VPS that already runs another site
 
 Use `deploy/hostinger/docker-compose.yml` when another project's web server already uses ports 80 and 443.
 
-1. Create a project in hPanel → VPS → **Docker Manager** from that file. Name it `omnitext`, and put the `.env` values in its environment.
+1. Create a project in hPanel → VPS → **Docker Manager** from that file. Name it `quicky`, and put the `.env` values in its environment.
    - It runs as its own project, with its own data volume and network, and uses no public ports.
    - It downloads the branch from GitHub on every start, so **restarting the project deploys the latest code**.
-2. Let the existing web server forward the domain to OmniText. If that server is Caddy, run this in the VPS terminal (change the folder and container names to match yours):
+2. Let the existing web server forward the domain to Quicky. If that server is Caddy, run this in the VPS terminal (change the folder and container names to match yours):
 
 ```bash
-docker network connect omnitext_edge bwg-portal-caddy-1
+docker network connect quicky_edge bwg-portal-caddy-1
 cp /opt/bwg-portal/Caddyfile /opt/bwg-portal/Caddyfile.bak
-printf '\n# OmniText (temporary test domain)\nomnitext.creatorsstory.com {\n\treverse_proxy omnitext-app:3000\n}\n' >> /opt/bwg-portal/Caddyfile
+printf '\n# Quicky\nheyquicky.com {\n\treverse_proxy quicky-app:3000\n}\nwww.heyquicky.com {\n\tredir https://heyquicky.com{uri} permanent\n}\n' >> /opt/bwg-portal/Caddyfile
 docker exec bwg-portal-caddy-1 caddy reload --config /etc/caddy/Caddyfile
 ```
 
@@ -97,7 +97,7 @@ To undo all of it, run:
 ```bash
 cp /opt/bwg-portal/Caddyfile.bak /opt/bwg-portal/Caddyfile
 docker exec bwg-portal-caddy-1 caddy reload --config /etc/caddy/Caddyfile
-docker network disconnect omnitext_edge bwg-portal-caddy-1
+docker network disconnect quicky_edge bwg-portal-caddy-1
 ```
 
 ### Option B: cPanel hosting ("Setup Node.js App")
@@ -115,25 +115,25 @@ docker network disconnect omnitext_edge bwg-portal-caddy-1
 
 Open these in a browser:
 
-- `https://omnitext.creatorsstory.com/healthz` should show `{"ok":true}`.
-- `https://omnitext.creatorsstory.com/privacy` should show the privacy policy.
+- `https://heyquicky.com/healthz` should show `{"ok":true}`.
+- `https://heyquicky.com/privacy` should show the privacy policy.
 
-Then open `https://omnitext.creatorsstory.com`, create your business account, and continue with **Meta app settings** below.
+Then open `https://heyquicky.com`, create your business account, and continue with **Meta app settings** below.
 
 ### Meta app settings for this domain
 
-Values to enter for the OmniText app (`1113995110986950`):
+Values to enter for the Quicky app (`1113995110986950`):
 
 | Where in the Meta dashboard | Value |
 | --- | --- |
-| App settings → Basic → Privacy policy URL | `https://omnitext.creatorsstory.com/privacy` |
-| App settings → Basic → Terms of service URL | `https://omnitext.creatorsstory.com/terms` |
-| App settings → Basic → User data deletion → Data deletion instructions URL | `https://omnitext.creatorsstory.com/data-deletion` |
-| App settings → Basic → App domains | `omnitext.creatorsstory.com` |
-| Facebook Login for Business → Settings → Valid OAuth Redirect URIs | `https://omnitext.creatorsstory.com/auth/facebook/callback` |
+| App settings → Basic → Privacy policy URL | `https://heyquicky.com/privacy` |
+| App settings → Basic → Terms of service URL | `https://heyquicky.com/terms` |
+| App settings → Basic → User data deletion → Data deletion instructions URL | `https://heyquicky.com/data-deletion` |
+| App settings → Basic → App domains | `heyquicky.com` |
+| Facebook Login for Business → Settings → Valid OAuth Redirect URIs | `https://heyquicky.com/auth/facebook/callback` |
 | Facebook Login for Business → Settings → Login with the JavaScript SDK | On |
-| Facebook Login for Business → Settings → Allowed Domains for the JavaScript SDK | `https://omnitext.creatorsstory.com` |
-| Webhooks (Messenger/Page, Instagram, WhatsApp Business Account): callback URL | `https://omnitext.creatorsstory.com/webhooks/meta` |
+| Facebook Login for Business → Settings → Allowed Domains for the JavaScript SDK | `https://heyquicky.com` |
+| Webhooks (Messenger/Page, Instagram, WhatsApp Business Account): callback URL | `https://heyquicky.com/webhooks/meta` |
 | Webhooks: verify token | The `META_VERIFY_TOKEN` from your `.env` |
 
 ## Connecting real channels
@@ -154,7 +154,7 @@ All three channels use one Meta app and one webhook URL: `https://<your-domain>/
 1. The owner clicks **Connect Facebook Page & Instagram** and logs in to Facebook.
 2. They tick their Pages. Facebook sends them back to the dashboard.
 3. They choose which Pages, and which Instagram accounts linked to those Pages, should come into the inbox.
-4. OmniText then:
+4. Quicky then:
    - subscribes each chosen Page to the app's webhooks
    - saves each Page's token, which doesn't expire because it comes from a long-lived login
 
@@ -162,7 +162,7 @@ All three channels use one Meta app and one webhook URL: `https://<your-domain>/
 
 1. The owner clicks **Connect WhatsApp**. Meta's Embedded Signup popup opens.
 2. In the popup, they create or choose a WhatsApp Business account and verify a phone number.
-3. OmniText then:
+3. Quicky then:
    - exchanges the signup code for a business token
    - subscribes the app to the WhatsApp Business account
    - registers the number for the Cloud API, and shows the owner the six-digit two-step verification PIN once
@@ -182,7 +182,7 @@ All three channels use one Meta app and one webhook URL: `https://<your-domain>/
 
 - If Meta stops accepting a stored token (for example, the seller changed their Facebook password or removed the app), the channel shows **"Facebook access expired: connect again"**.
 - Connecting the same Page or number again refreshes the token. Its conversations are kept.
-- A Page can belong to only one OmniText account at a time.
+- A Page can belong to only one Quicky account at a time.
 
 The manual form (ID plus access token) is still under **Connect manually (advanced)**. Use it for testing, or for system-user tokens you create yourself.
 
@@ -195,7 +195,7 @@ The manual form (ID plus access token) is still under **Connect manually (advanc
 | `PUBLIC_URL` | Your public https address, e.g. `https://inbox.example.com`. Used to build the login redirect. Set it when running behind a proxy or load balancer. |
 | `TOKEN_ENCRYPTION_KEY` | 32 random bytes as hex. Access tokens are stored encrypted with AES-256-GCM. Required in production; the server won't start without it. Create one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Keep it safe: if it's lost, every channel has to be connected again. |
 | `META_GRAPH_VERSION` | Graph API version. Defaults to `v23.0`. |
-| `DATABASE_PATH` | SQLite file location. Defaults to `data/omnitext.db`. |
+| `DATABASE_PATH` | SQLite file location. Defaults to `data/quicky.db`. |
 | `DRY_RUN` | `1` stores replies without sending them to Meta. |
 | `PORT`, `NODE_ENV` | Standard. |
 

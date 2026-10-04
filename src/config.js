@@ -8,7 +8,7 @@ function cleanSecret(value) {
 export function loadConfig(env = process.env) {
   return {
     port: Number(env.PORT || 3000),
-    dbPath: env.DATABASE_PATH || 'data/omnitext.db',
+    dbPath: env.DATABASE_PATH || 'data/quicky.db',
     isProduction: env.NODE_ENV === 'production',
     // When true, replies are stored but never sent to Meta. Useful for local demos.
     dryRun: env.DRY_RUN === '1' || env.DRY_RUN === 'true',
@@ -18,7 +18,7 @@ export function loadConfig(env = process.env) {
     tokenKey: parseKey(env.TOKEN_ENCRYPTION_KEY),
     // Shown on the privacy policy, terms and data deletion pages.
     legal: {
-      operator: env.OPERATOR_NAME || 'OmniText',
+      operator: env.OPERATOR_NAME || 'Quicky',
       supportEmail: env.SUPPORT_EMAIL || '',
       updated: env.LEGAL_UPDATED || '2 October 2026',
     },

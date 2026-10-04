@@ -2,7 +2,7 @@ FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    DATABASE_PATH=/app/data/omnitext.db \
+    DATABASE_PATH=/app/data/quicky.db \
     PORT=3000
 
 COPY package.json package-lock.json ./

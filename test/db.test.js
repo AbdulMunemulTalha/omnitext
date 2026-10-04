@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../src/db.js';
 
 test('upgrades a database created before delivery charges existed', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'omnitext-'));
+  const dir = mkdtempSync(join(tmpdir(), 'quicky-'));
   try {
     const path = join(dir, 'old.db');
     const old = new DatabaseSync(path);

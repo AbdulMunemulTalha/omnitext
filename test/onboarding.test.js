@@ -87,7 +87,7 @@ test('shops created before onboarding existed are treated as set up', async () =
   const { mkdtempSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'omnitext-'));
+  const dir = mkdtempSync(join(tmpdir(), 'quicky-'));
   try {
     const old = new DatabaseSync(join(dir, 'old.db'));
     old.exec("CREATE TABLE workspaces (id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT ''); INSERT INTO workspaces (name) VALUES ('Old shop');");

@@ -15,7 +15,7 @@ const minutesFromNow = (m) => new Date(Date.now() + m * 60_000).toISOString();
 function upsertChannel(db, workspaceId, { platform, externalId, name, token, wabaId = null, pageId = null }) {
   const existing = db.prepare('SELECT * FROM channels WHERE platform = ? AND external_id = ?').get(platform, externalId);
   if (existing && existing.workspace_id !== workspaceId) {
-    throw new InboxError(409, `${name} is already connected to another OmniText account`);
+    throw new InboxError(409, `${name} is already connected to another Quicky account`);
   }
   if (existing) {
     db.prepare(`UPDATE channels SET name = ?, access_token = ?, waba_id = COALESCE(?, waba_id), page_id = COALESCE(?, page_id),

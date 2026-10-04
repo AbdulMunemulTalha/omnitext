@@ -1,7 +1,7 @@
-# OmniText on a VPS that already has a web server (Caddy) on ports 80/443.
+# Quicky on a VPS that already has a web server (Caddy) on ports 80/443.
 # Deployed with Hostinger's Docker Manager as its own project: its own data
 # volume, its own network, and no published ports. The existing web server
-# reaches it over the "omnitext_edge" network at http://omnitext-app:3000.
+# reaches it over the "quicky_edge" network at http://quicky-app:3000.
 #
 # Docker Manager runs images but does not build them, so the stock Node image
 # downloads the code from GitHub on every start. Restarting the project
@@ -16,8 +16,8 @@ services:
       - -c
       - >-
         set -e;
-        rm -rf /srv/omnitext && mkdir -p /srv/omnitext && cd /srv/omnitext;
-        wget -qO- "https://codeload.github.com/AbdulMunemulTalha/omnitext/tar.gz/refs/heads/$${OMNITEXT_BRANCH}" | tar xz --strip-components=1;
+        rm -rf /srv/quicky && mkdir -p /srv/quicky && cd /srv/quicky;
+        wget -qO- "https://codeload.github.com/AbdulMunemulTalha/omnitext/tar.gz/refs/heads/$${QUICKY_BRANCH}" | tar xz --strip-components=1;
         npm ci --omit=dev --no-audit --no-fund;
         exec node --disable-warning=ExperimentalWarning src/server.js
     env_file:
@@ -25,10 +25,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_PATH: /data/omnitext.db
-      OMNITEXT_BRANCH: claude/bd-ecom-messaging-saas-73p1up
+      DATABASE_PATH: /data/quicky.db
+      QUICKY_BRANCH: claude/bd-ecom-messaging-saas-73p1up
     volumes:
-      - omnitext_data:/data
+      - quicky_data:/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
       interval: 30s
@@ -37,11 +37,11 @@ services:
     networks:
       edge:
         aliases:
-          - omnitext-app
+          - quicky-app
 
 networks:
   edge:
-    name: omnitext_edge
+    name: quicky_edge
 
 volumes:
-  omnitext_data:
+  quicky_data:
