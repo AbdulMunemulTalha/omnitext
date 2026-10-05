@@ -21,3 +21,17 @@ test('serves the privacy policy, terms and data deletion pages Meta asks for', a
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('legal pages default to info@heyquicky.com', async () => {
+  const ctx = setup();
+  const { server } = createApp(ctx.db, ctx.config);
+  await new Promise((resolve) => server.listen(0, resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    for (const path of ['/privacy', '/terms', '/data-deletion']) {
+      assert.match(await (await fetch(`${base}${path}`)).text(), /mailto:info@heyquicky\.com/, path);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -19,7 +19,7 @@ export function loadConfig(env = process.env) {
     // Shown on the privacy policy, terms and data deletion pages.
     legal: {
       operator: env.OPERATOR_NAME || 'Quicky',
-      supportEmail: env.SUPPORT_EMAIL || '',
+      supportEmail: env.SUPPORT_EMAIL || 'info@heyquicky.com',
       updated: env.LEGAL_UPDATED || '2 October 2026',
     },
     meta: {
