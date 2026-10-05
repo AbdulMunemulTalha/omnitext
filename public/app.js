@@ -7,6 +7,8 @@ const state = {
   team: [],
   filter: 'mine',
   status: 'open',
+  platform: '',
+  search: '',
   conversations: new Map(),
   activeId: null,
   messages: [],
@@ -125,31 +127,65 @@ $('#logout').addEventListener('click', async () => {
 
 function visibleInList(c) {
   if (c.status !== state.status) return false;
+  if (state.platform && c.platform !== state.platform) return false;
+  if (state.search) {
+    const label = customerLabel(c);
+    const haystack = `${label.title} ${label.subtitle} ${c.contact_name || ''} ${c.last_message_preview || ''}`.toLowerCase();
+    if (!haystack.includes(state.search)) return false;
+  }
   if (state.filter === 'mine') return c.assigned_user_id === state.me.user.id;
   if (state.filter === 'unassigned') return c.assigned_user_id === null;
   return true;
+}
+
+function initials(name) {
+  const words = String(name || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '';
+  return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
+}
+
+// A round avatar with the customer's initials and a small dot for the app they wrote on.
+function avatar(c, extra = '') {
+  const text = initials(c.contact_name) || (c.platform === 'whatsapp' ? '#' : '?');
+  return el('span', { class: `avatar ${extra}`, 'aria-hidden': 'true' }, text, el('i', { class: `dot ${c.platform}` }));
+}
+
+function setAvatar(node, c) {
+  node.replaceChildren(...avatar(c).childNodes);
 }
 
 function renderList() {
   const items = [...state.conversations.values()]
     .filter(visibleInList)
     .sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''));
-  const list = $('#conversation-list');
-  list.replaceChildren(...items.map((c) => el('li', {
-    class: c.id === state.activeId ? 'active' : '',
-    onclick: () => openConversation(c.id),
-  },
-  el('div', { class: 'row' },
-    el('span', { class: `badge ${c.platform}` }, PLATFORM_LABEL[c.platform]),
-    el('span', { class: 'name' }, customerLabel(c).title,
-      customerLabel(c).subtitle ? el('span', { class: 'muted name-extra' }, ` · ${customerLabel(c).subtitle}`) : null),
-    c.unread_count ? el('span', { class: 'unread' }, String(c.unread_count)) : null,
-    el('span', { class: 'muted small' }, timeLabel(c.last_message_at))),
-  el('div', { class: 'preview' }, c.last_message_preview || ' '),
-  state.filter !== 'mine'
-    ? el('div', { class: 'muted small' }, c.assigned_user_name ? `Handled by ${c.assigned_user_name}` : 'Waiting for a moderator')
-    : null)));
-  if (!items.length) list.replaceChildren(el('li', { class: 'muted' }, 'No conversations here'));
+  $('#conversation-list').replaceChildren(...items.map((c) => {
+    const label = customerLabel(c);
+    return el('li', {
+      class: `${c.id === state.activeId ? 'active' : ''} ${c.unread_count ? 'has-unread' : ''}`,
+      onclick: () => openConversation(c.id),
+    },
+    avatar(c),
+    el('div', { class: 'conv-body' },
+      el('div', { class: 'row' },
+        el('span', { class: 'name' }, label.title,
+          label.subtitle ? el('span', { class: 'muted name-extra' }, ` · ${label.subtitle}`) : null),
+        el('span', { class: 'time' }, timeLabel(c.last_message_at))),
+      el('div', { class: 'row' },
+        el('span', { class: 'preview' }, c.last_message_preview || ' '),
+        c.unread_count ? el('span', { class: 'unread' }, String(c.unread_count)) : null),
+      state.filter !== 'mine'
+        ? el('div', { class: 'handler' }, c.assigned_user_name ? `Handled by ${c.assigned_user_name}` : 'Waiting for a moderator')
+        : null));
+  }));
+  const none = items.length === 0;
+  $('#list-empty').hidden = !none;
+  $('#list-empty-text').textContent = state.search ? 'No chats match your search' : 'No chats yet';
+  if (!state.activeId || !state.conversations.has(state.activeId)) {
+    $('#chat-empty-title').textContent = none ? 'No threads here yet' : 'No chat selected';
+    $('#chat-empty-text').textContent = none
+      ? 'You have no conversations yet in this section'
+      : 'Pick a chat from the list to read and reply.';
+  }
 }
 
 // Open conversations nobody has picked up yet, shown as a count on the tab.
@@ -190,9 +226,38 @@ $('#tabs').addEventListener('click', (e) => {
   loadConversations();
 });
 
-$('#status-filter').addEventListener('change', (e) => {
-  state.status = e.target.value;
+function closeChat() {
+  state.activeId = null;
+  $('#chat-inner').hidden = true;
+  $('#chat-empty').hidden = false;
+}
+
+$('#status-toggle').addEventListener('click', () => {
+  state.status = state.status === 'open' ? 'closed' : 'open';
+  const closed = state.status === 'closed';
+  $('#list-title').textContent = closed ? 'Closed chats' : 'Active chats';
+  $('#status-toggle-text').textContent = closed ? 'Active chats' : 'Closed chats';
+  closeChat();
   loadConversations();
+});
+
+$('#platform-filter').addEventListener('change', (e) => {
+  state.platform = e.target.value;
+  $('#channel-dot').className = `channel-dot ${state.platform}`;
+  renderList();
+});
+
+$('#search').addEventListener('input', (e) => {
+  state.search = e.target.value.trim().toLowerCase();
+  renderList();
+});
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && !$('#app').hidden) {
+    e.preventDefault();
+    $('#search').focus();
+    $('#search').select();
+  }
 });
 
 // ---- Chat ---------------------------------------------------------------
@@ -214,6 +279,7 @@ function renderChatHeader() {
   const c = state.conversations.get(state.activeId);
   if (!c) return;
   const label = customerLabel(c);
+  setAvatar($('#chat-avatar'), c);
   $('#chat-title').textContent = label.subtitle ? `${label.title} · ${label.subtitle}` : label.title;
   $('#chat-sub').textContent = `${PLATFORM_LABEL[c.platform]} · ${c.channel_name} · ${c.assigned_user_name ? `Handled by ${c.assigned_user_name}` : 'Unassigned'}`;
   $('#toggle-status').textContent = c.status === 'open' ? 'Mark done' : 'Reopen';
@@ -278,6 +344,7 @@ $('#composer').addEventListener('submit', async (e) => {
   const text = input.value.trim();
   if (!text || !state.activeId) return;
   input.value = '';
+  fitComposer();
   try {
     await api(`/conversations/${state.activeId}/messages`, { method: 'POST', body: { text } });
   } catch (err) {
@@ -285,6 +352,13 @@ $('#composer').addEventListener('submit', async (e) => {
     alert(err.message);
   }
 });
+
+function fitComposer() {
+  const box = $('#composer-text');
+  box.style.height = 'auto';
+  box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
+}
+$('#composer-text').addEventListener('input', fitComposer);
 
 $('#composer-text').addEventListener('keydown', (e) => {
   if (pickerKeydown(e)) return;
@@ -1108,6 +1182,7 @@ async function enterApp() {
   $('#app').hidden = false;
   $('#workspace-name').textContent = state.me.workspace.name;
   $('#me-name').textContent = `${state.me.user.name} (${state.me.user.role})`;
+  $('#me-avatar').textContent = initials(state.me.user.name) || '?';
   $('#duty-toggle').checked = state.me.user.isOnline;
   $('#open-settings').hidden = !isOwner;
   $('#simulator').hidden = !(isOwner && state.me.devTools);
