@@ -100,7 +100,7 @@ export function apiRoutes(db, config, inbox, orders, importer) {
   });
 
   router.get('/conversations', auth, (req, res) => {
-    res.json(inbox.listConversations(req.user, { filter: req.query.filter, status: req.query.status === 'closed' ? 'closed' : 'open' }));
+    res.json(inbox.listConversations(req.user, { filter: req.query.filter, status: ['open', 'closed'].includes(req.query.status) ? req.query.status : 'all' }));
   });
 
   router.get('/conversations/:id/messages', auth, (req, res) => {

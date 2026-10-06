@@ -77,6 +77,10 @@ test('imported history is filed sensibly and never duplicated', () => {
   assert.equal(rows.answered.status, 'closed');
   assert.equal(rows.old.status, 'closed');
   assert.equal(rows.old.name, 'Old Customer');
+  // Every chat shows in the inbox list; there is no separate "closed" list.
+  const owner = db.prepare("SELECT * FROM users WHERE role = 'owner'").get();
+  assert.equal(inbox.listConversations(owner, { filter: 'all' }).length, 3);
+  assert.equal(inbox.listConversations(owner, { filter: 'unassigned' }).length, 2);
 
   // Importing again, or the same message arriving live, adds nothing.
   assert.deepEqual(inbox.importHistory(channel, threads), { conversations: 3, messages: 0 });

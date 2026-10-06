@@ -232,9 +232,12 @@ export function createInbox(db, config, { emit = () => {}, fetchImpl } = {}) {
       publish(row.conversation_id, row.id);
     },
 
-    listConversations(user, { filter = 'mine', status = 'open' } = {}) {
-      const where = ['c.workspace_id = ?', 'c.status = ?'];
-      const params = [user.workspace_id, status];
+    // status 'all' lists every chat; 'open'/'closed' only matter internally
+    // (closed chats are old ones that are not waiting for a reply).
+    listConversations(user, { filter = 'mine', status = 'all' } = {}) {
+      const where = ['c.workspace_id = ?'];
+      const params = [user.workspace_id];
+      if (status === 'open' || status === 'closed') { where.push('c.status = ?'); params.push(status); }
       if (filter === 'unassigned') where.push('c.assigned_user_id IS NULL');
       else if (filter === 'all' && user.role === 'owner') { /* everything */ }
       else { where.push('c.assigned_user_id = ?'); params.push(user.id); }

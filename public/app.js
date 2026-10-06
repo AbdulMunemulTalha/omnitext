@@ -6,7 +6,6 @@ const state = {
   me: null,
   team: [],
   filter: 'mine',
-  status: 'open',
   platform: '',
   search: '',
   conversations: new Map(),
@@ -126,7 +125,6 @@ $('#logout').addEventListener('click', async () => {
 // ---- Conversation list --------------------------------------------------
 
 function visibleInList(c) {
-  if (c.status !== state.status) return false;
   if (state.platform && c.platform !== state.platform) return false;
   if (state.search) {
     const label = customerLabel(c);
@@ -204,7 +202,7 @@ function trackWaiting(c) {
 
 async function loadConversations() {
   const [rows, unassigned] = await Promise.all([
-    api(`/conversations?filter=${state.filter}&status=${state.status}`),
+    api(`/conversations?filter=${state.filter}`),
     api('/conversations?filter=unassigned&status=open'),
   ]);
   state.conversations = new Map(rows.map((c) => [c.id, c]));
@@ -223,21 +221,6 @@ $('#tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-filter]');
   if (!btn) return;
   selectTab(btn.dataset.filter);
-  loadConversations();
-});
-
-function closeChat() {
-  state.activeId = null;
-  $('#chat-inner').hidden = true;
-  $('#chat-empty').hidden = false;
-}
-
-$('#status-toggle').addEventListener('click', () => {
-  state.status = state.status === 'open' ? 'closed' : 'open';
-  const closed = state.status === 'closed';
-  $('#list-title').textContent = closed ? 'Closed chats' : 'Active chats';
-  $('#status-toggle-text').textContent = closed ? 'Active chats' : 'Closed chats';
-  closeChat();
   loadConversations();
 });
 
@@ -282,7 +265,6 @@ function renderChatHeader() {
   setAvatar($('#chat-avatar'), c);
   $('#chat-title').textContent = label.subtitle ? `${label.title} · ${label.subtitle}` : label.title;
   $('#chat-sub').textContent = `${PLATFORM_LABEL[c.platform]} · ${c.channel_name} · ${c.assigned_user_name ? `Handled by ${c.assigned_user_name}` : 'Unassigned'}`;
-  $('#toggle-status').textContent = c.status === 'open' ? 'Mark done' : 'Reopen';
 
   const select = $('#assign-select');
   if (state.me.user.role === 'owner') {
@@ -365,15 +347,6 @@ $('#composer-text').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     $('#composer').requestSubmit();
-  }
-});
-
-$('#toggle-status').addEventListener('click', async () => {
-  const c = state.conversations.get(state.activeId);
-  try {
-    await api(`/conversations/${c.id}/status`, { method: 'POST', body: { status: c.status === 'open' ? 'closed' : 'open' } });
-  } catch (err) {
-    alert(err.message);
   }
 });
 
@@ -1137,8 +1110,7 @@ function pastChatsItem(channels, item) {
       + 'You can open your inbox now; they keep arriving in the background.');
   }
   if (total) {
-    return item(true, `${total} existing conversation${total === 1 ? '' : 's'} brought in. Chats still waiting for a reply are open; `
-      + 'older ones are under "Closed" in the inbox.');
+    return item(true, `${total} existing conversation${total === 1 ? '' : 's'} brought in. They are all in your inbox.`);
   }
   return null;
 }
